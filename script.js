@@ -61,11 +61,16 @@ Snake.prototype.length = function () {
 
 Snake.prototype.changeDirection = function (name) {
   let d = directions[name];
-  this.dx = d.dx;
-  this.dy = d.dy;
-  console.log(`Turned ${name} now dx = ${this.dx}; dy = ${this.dy}`);
+  if (!this.isReversal(d)) {
+    this.dx = d.dx;
+    this.dy = d.dy;
+    console.log(`Turned ${name} now dx = ${this.dx}; dy = ${this.dy}`);
+  }
 };
 
+Snake.prototype.isReversal = function (d) {
+  return this.dx != 0 && this.dx == d.dx * -1 || this.dy != 0 && this.dy == d.dy * -1;
+}
 
 Snake.prototype.drawCell = function (cell, color) {
   this.set(cell, color);
