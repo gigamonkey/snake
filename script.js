@@ -1,13 +1,22 @@
 const canvas = document.getElementById("screen");
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext("2d");
 const html = document.getElementsByTagName("html")[0];
 
 const size = 16;
 const grid = Math.floor(canvas.width / size);
 
-const grassColor = 'green';
-const snakeColor = 'purple';
-const foodColor = 'red';
+const grassColor = "green";
+const snakeColor = "purple";
+const foodColor = "red";
+
+const keys = {
+  38: "up",
+  40: "down",
+  37: "left",
+  39: "right",
+  32: "space",
+  82: "rerun",
+};
 
 const directions = {
   up: { dx: 0, dy: -1 },
@@ -72,35 +81,30 @@ Snake.prototype.applyTurn = function (d) {
 };
 
 Snake.prototype.isReversal = function (d) {
-  return this.dx != 0 && this.dx == d.dx * -1 || this.dy != 0 && this.dy == d.dy * -1;
-}
+  return this.dx * -1 == d.dx && this.dy * -1 == d.dy;
+};
 
 Snake.prototype.drawCell = function (cell, color) {
   this.set(cell, color);
   ctx.fillStyle = color;
-  ctx.fillRect(cell.x * size, cell.y * size, size, size)
+  ctx.fillRect(cell.x * size, cell.y * size, size, size);
 };
 
 Snake.prototype.ok = function (cell) {
   let xOk = 0 <= cell.x && cell.x < this.dimension;
-  let yOk = 0 <= cell.y && cell.y < this.dimension
-  if (xOk && yOk) {
-    return this.get(cell) == grassColor || this.get(cell) == foodColor;
-  } else {
-    return false;
-  }
+  let yOk = 0 <= cell.y && cell.y < this.dimension;
+  return xOk && yOk && this.get(cell) == grassColor || this.get(cell) == foodColor;
 };
 
 Snake.prototype.food = function (cell) {
   return this.get(cell) == foodColor;
 };
 
-
-
 Snake.prototype.update = function () {
   if (this.turns.length > 0) {
-    this.applyTurn(this.turns.shift())
+    this.applyTurn(this.turns.shift());
   }
+
   let next = this.nextPosition();
   if (this.ok(next)) {
     if (!this.food(next)) {
@@ -111,7 +115,6 @@ Snake.prototype.update = function () {
     this.addAtHead(next);
     return true;
   } else {
-    // game over.
     return false;
   }
 };
@@ -132,7 +135,6 @@ Snake.prototype.addFood = function () {
   }
 };
 
-
 function init() {
   ctx.fillStyle = grassColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -140,7 +142,7 @@ function init() {
   let snake = new Snake(grid);
   snake.dx = 1;
   snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1));
-  snake.addAtHead(snake.nextPosition())
+  snake.addAtHead(snake.nextPosition());
   snake.addFood();
 
   html.onkeydown = directionChanger(snake);
@@ -169,14 +171,6 @@ function animate(update, fps) {
   requestAnimationFrame(oneFrame);
 }
 
-const keys = {
-  38: "up",
-  40: "down",
-  37: "left",
-  39: "right",
-  32: "space",
-  82: "rerun",
-};
 
 function directionChanger(snake) {
   return (e) => {
@@ -192,7 +186,7 @@ function directionChanger(snake) {
     } else {
       console.log(e.keyCode);
     }
-  }
+  };
 }
 
-window.onload = (e) => init();
+window.onload = () => init();
