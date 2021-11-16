@@ -144,6 +144,7 @@ function init() {
   snake.addFood();
 
   html.onkeydown = directionChanger(snake);
+  return snake;
 }
 
 function start(snake) {
@@ -174,6 +175,7 @@ const keys = {
   37: "left",
   39: "right",
   32: "space",
+  82: "rerun",
 };
 
 function directionChanger(snake) {
@@ -182,6 +184,8 @@ function directionChanger(snake) {
       const key = keys[e.keyCode];
       if (key == "space") {
         start(snake);
+      } else if (key == "rerun") {
+        start(init());
       } else {
         snake.changeDirection(key);
       }
