@@ -39,6 +39,7 @@ function Snake(dimension) {
   this.dy = 0;
   this.turns = [];
   this.listeners = [];
+  this.enteredSquare = undefined;
 }
 
 Snake.prototype.get = function (cell) {
@@ -54,10 +55,23 @@ Snake.prototype.nextPosition = function () {
   return pos(cell.x + this.dx, cell.y + this.dy);
 };
 
-Snake.prototype.addAtHead = function (cell) {
+Snake.prototype.getHead = function () {
+  return this.segments[this.head - 1];
+};
+
+Snake.prototype.enterSquare = function (cell, timestamp) {
+  this.enteredSquare = timestamp;
+  this.addAtHead(cell);
+};
+
+Snake.prototype.addAtHead = function (cell, draw) {
   this.segments[this.head] = cell;
   this.head = (this.head + 1) % this.segments.length;
-  this.drawCell(cell, snakeColor);
+  if (draw) {
+    this.drawCell(cell, snakeColor);
+  } else {
+    this.set(cell, snakeColor); // Set this even though we will fill it in in bits.
+  }
 };
 
 Snake.prototype.removeTail = function () {
@@ -91,6 +105,33 @@ Snake.prototype.drawCell = function (cell, color) {
   ctx.fillRect(cell.x * size, cell.y * size, size, size);
 };
 
+Snake.prototype.drawPartialHead = function (proportion) {
+  let cell = this.getHead();
+  let x = cell.x * size;
+  let y = cell.y * size;
+  let width = size;
+  let height = size;
+
+  if (this.dx == 1) {
+    // Moving right.
+    width *= proportion;
+  } else if (this.dx == -1) {
+    // Moving left
+    x += size * (1 - proportion);
+    width *= proportion;
+  } else if (this.dy == 1) {
+    // Moving down.
+    height *= proportion;
+  } else if (this.dy == -1) {
+    // Moving up.
+    y += size * (1 - proportion);
+    height *= proportion;
+  }
+
+  ctx.fillStyle = snakeColor;
+  ctx.fillRect(x, y, width, height);
+};
+
 Snake.prototype.ok = function (cell) {
   let xOk = 0 <= cell.x && cell.x < this.dimension;
   let yOk = 0 <= cell.y && cell.y < this.dimension;
@@ -99,6 +140,77 @@ Snake.prototype.ok = function (cell) {
 
 Snake.prototype.isFood = function (cell) {
   return this.get(cell) == foodColor;
+};
+
+Snake.prototype.animate = function (timestamp) {
+  // When we completely fill a cell, then we check the next position
+  // to see if we're crashing into something. If not, then we check to
+  // see if we're going to be eating food.
+  // Fill in the next position in proportion to the number of
+  // milliseconds that have passed since we entered this cell. The big
+  // update happens exactly when we have filled the cell.
+  //
+  // Similarly, unfill the tail segment unless we are in the process
+  // of consuming food.
+  //
+  // Need to fill the cell in the direction we are moving.
+  //
+  // To unfill the tail we need to figure out the correct direction,
+  // namely toward the next segment.
+
+  if (this.enteredSquare === undefined) {
+    return this.updateHead(timestamp);
+  } else {
+    let timeInSquare = timestamp - this.enteredSquare;
+    let proportion = (timeInSquare * this.squaresPerSecond) / 1000;
+    if (proportion >= 1) {
+      // We have completely filled in the head.
+      this.drawCell(this.getHead(), snakeColor);
+      return this.updateHead(timestamp);
+    } else {
+      this.drawPartialHead(proportion);
+      return true;
+    }
+  }
+};
+
+Snake.prototype.updateHead = function (timestamp) {
+  // Called when we have completely filled the current cell. Figure
+  // out the next position and add it as the head but don't fill it in
+  // immediately. Instead animate() will progressively fill it in.
+  // When it is filled in then animate will call this function again
+  // to get the next head position after applying the next queued
+  // turn. This method still returns false if we crash and animate
+  // needs to propagate that out
+
+  if (this.turns.length > 0) {
+    this.applyTurn(this.turns.shift());
+  }
+
+  let next = this.nextPosition();
+
+  if (this.ok(next)) {
+    // Have to check if it's food before we draw the new head. But we
+    // want to draw the new head before we place the new random food
+    // so the snake is at its new length.
+    let nextIsFood = this.isFood(next);
+
+    this.enterSquare(next, timestamp);
+
+    if (nextIsFood) {
+      // I.e. we're eating the food in the next square. Go ahead and
+      // add some new food elsewhere.
+      this.addRandomFood();
+      this.updateScore();
+    } else {
+      // Until we implement unfilling the tail we'll just remove it
+      // all at once.
+      this.removeTail();
+    }
+    return true;
+  } else {
+    return false;
+  }
 };
 
 Snake.prototype.update = function () {
@@ -160,8 +272,9 @@ function init() {
 
   let snake = new Snake(grid);
   snake.dx = 1;
-  snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1));
-  snake.addAtHead(snake.nextPosition());
+  snake.squaresPerSecond = 10;
+  snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1), true);
+  snake.addAtHead(snake.nextPosition(), true);
   snake.addRandomFood();
 
   html.onkeydown = directionChanger(snake);
@@ -183,9 +296,11 @@ function nDigits(num, n) {
 }
 
 function start(snake) {
-  animate(() => snake.update(), 10);
+  //animate(() => snake.update(), 10);
+  animate((ts) => snake.animate(ts));
 }
 
+/*
 function animate(update, fps) {
   let nextFrame;
   const oneFrame = (timestamp) => {
@@ -202,6 +317,16 @@ function animate(update, fps) {
     }
   };
   requestAnimationFrame(oneFrame);
+}
+*/
+
+function animate(update) {
+  const step = (timestamp) => {
+    if (update(timestamp)) {
+      requestAnimationFrame(step);
+    }
+  };
+  requestAnimationFrame(step);
 }
 
 function directionChanger(snake) {
