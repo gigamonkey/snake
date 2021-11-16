@@ -38,6 +38,7 @@ function Snake(dimension) {
   this.dx = 0;
   this.dy = 0;
   this.turns = [];
+  this.listeners = [];
 }
 
 Snake.prototype.get = function (cell) {
@@ -93,10 +94,10 @@ Snake.prototype.drawCell = function (cell, color) {
 Snake.prototype.ok = function (cell) {
   let xOk = 0 <= cell.x && cell.x < this.dimension;
   let yOk = 0 <= cell.y && cell.y < this.dimension;
-  return xOk && yOk && this.get(cell) == grassColor || this.get(cell) == foodColor;
+  return (xOk && yOk && this.get(cell) == grassColor) || this.get(cell) == foodColor;
 };
 
-Snake.prototype.food = function (cell) {
+Snake.prototype.isFood = function (cell) {
   return this.get(cell) == foodColor;
 };
 
@@ -106,20 +107,38 @@ Snake.prototype.update = function () {
   }
 
   let next = this.nextPosition();
+
   if (this.ok(next)) {
-    if (!this.food(next)) {
+    // Have to check if it's food before we draw the new head. But we
+    // want to draw the new head before we place the new random food
+    // so the snake is at its new length.
+    let wasFood = this.isFood(next);
+
+    this.addAtHead(next);
+    if (!wasFood) {
       this.removeTail();
     } else {
-      this.addFood();
+      this.addRandomFood();
+      this.updateScore();
     }
-    this.addAtHead(next);
     return true;
   } else {
     return false;
   }
 };
 
-Snake.prototype.addFood = function () {
+Snake.prototype.addScoreListener = function (fn) {
+  this.listeners.push(fn);
+  this.updateScore();
+};
+
+Snake.prototype.updateScore = function () {
+  for (let fn of this.listeners) {
+    fn(this.length() - 2);
+  }
+};
+
+Snake.prototype.addRandomFood = function () {
   let max = this.grid.length - this.length();
   let n = Math.floor(Math.random() * max);
   for (let i = 0; i < this.grid.length; i++) {
@@ -143,10 +162,24 @@ function init() {
   snake.dx = 1;
   snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1));
   snake.addAtHead(snake.nextPosition());
-  snake.addFood();
+  snake.addRandomFood();
 
   html.onkeydown = directionChanger(snake);
+
+  snake.addScoreListener((s) => {
+    document.getElementById("score").innerText = nDigits(s, 4);
+  });
+
   return snake;
+}
+
+function nDigits(num, n) {
+  let numStr = "" + num;
+  return (
+    Array(Math.max(0, n - numStr.length))
+      .fill(0)
+      .join("") + numStr
+  );
 }
 
 function start(snake) {
@@ -171,7 +204,6 @@ function animate(update, fps) {
   requestAnimationFrame(oneFrame);
 }
 
-
 function directionChanger(snake) {
   return (e) => {
     if (e.keyCode in keys) {
@@ -179,7 +211,7 @@ function directionChanger(snake) {
       if (key == "space") {
         start(snake);
       } else if (key == "rerun") {
-        start(init());
+        snake = init();
       } else {
         snake.changeDirection(key);
       }
