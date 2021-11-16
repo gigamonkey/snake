@@ -40,6 +40,8 @@ function Snake(dimension) {
   this.turns = [];
   this.listeners = [];
   this.enteredSquare = undefined;
+  this.isEating = false;
+  this.speedUp = 1;
 }
 
 Snake.prototype.get = function (cell) {
@@ -59,8 +61,13 @@ Snake.prototype.getHead = function () {
   return this.segments[this.head - 1];
 };
 
-Snake.prototype.enterSquare = function (cell, timestamp) {
+Snake.prototype.getTail = function () {
+  return this.segments[this.tail];
+};
+
+Snake.prototype.enterSquare = function (cell, timestamp, isFood) {
   this.enteredSquare = timestamp;
+  this.isEating = isFood;
   this.addAtHead(cell);
 };
 
@@ -106,31 +113,48 @@ Snake.prototype.drawCell = function (cell, color) {
 };
 
 Snake.prototype.drawPartialHead = function (proportion) {
-  let cell = this.getHead();
+  partialFill(this.getHead(), this, proportion, snakeColor);
+};
+
+Snake.prototype.erasePartialTail = function (proportion) {
+  let tail = this.getTail();
+  let nextCell = this.segments[(this.tail + 1) % this.segments.length];
+
+  let direction = {
+    dx: nextCell.x - tail.x,
+    dy: nextCell.y - tail.y,
+  };
+
+  partialFill(tail, direction, proportion, grassColor);
+};
+
+function partialFill(cell, direction, proportion, color) {
   let x = cell.x * size;
   let y = cell.y * size;
   let width = size;
   let height = size;
 
-  if (this.dx == 1) {
+  if (direction.dx == 1) {
     // Moving right.
     width *= proportion;
-  } else if (this.dx == -1) {
+  } else if (direction.dx == -1) {
     // Moving left
     x += size * (1 - proportion);
     width *= proportion;
-  } else if (this.dy == 1) {
+  } else if (direction.dy == 1) {
     // Moving down.
     height *= proportion;
-  } else if (this.dy == -1) {
+  } else if (direction.dy == -1) {
     // Moving up.
     y += size * (1 - proportion);
     height *= proportion;
   }
 
-  ctx.fillStyle = snakeColor;
+  //console.log(`Filling x: ${x}; y: ${y}; width: ${width}; height: ${height}; proportion: ${proportion}`);
+
+  ctx.fillStyle = color;
   ctx.fillRect(x, y, width, height);
-};
+}
 
 Snake.prototype.ok = function (cell) {
   let xOk = 0 <= cell.x && cell.x < this.dimension;
@@ -166,9 +190,15 @@ Snake.prototype.animate = function (timestamp) {
     if (proportion >= 1) {
       // We have completely filled in the head.
       this.drawCell(this.getHead(), snakeColor);
+      if (!this.isEating) {
+        this.removeTail();
+      }
       return this.updateHead(timestamp);
     } else {
       this.drawPartialHead(proportion);
+      if (!this.isEating) {
+        this.erasePartialTail(proportion);
+      }
       return true;
     }
   }
@@ -195,17 +225,14 @@ Snake.prototype.updateHead = function (timestamp) {
     // so the snake is at its new length.
     let nextIsFood = this.isFood(next);
 
-    this.enterSquare(next, timestamp);
+    this.enterSquare(next, timestamp, nextIsFood);
 
     if (nextIsFood) {
       // I.e. we're eating the food in the next square. Go ahead and
       // add some new food elsewhere.
       this.addRandomFood();
       this.updateScore();
-    } else {
-      // Until we implement unfilling the tail we'll just remove it
-      // all at once.
-      this.removeTail();
+      this.squaresPerSecond *= this.speedUp;
     }
     return true;
   } else {
@@ -273,6 +300,7 @@ function init() {
   let snake = new Snake(grid);
   snake.dx = 1;
   snake.squaresPerSecond = 10;
+  snake.speedUp = 1.05;
   snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1), true);
   snake.addAtHead(snake.nextPosition(), true);
   snake.addRandomFood();
