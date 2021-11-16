@@ -28,6 +28,7 @@ function Snake(dimension) {
   this.tail = 0;
   this.dx = 0;
   this.dy = 0;
+  this.turns = [];
 }
 
 Snake.prototype.get = function (cell) {
@@ -60,11 +61,13 @@ Snake.prototype.length = function () {
 };
 
 Snake.prototype.changeDirection = function (name) {
-  let d = directions[name];
+  this.turns.push(directions[name]);
+};
+
+Snake.prototype.applyTurn = function (d) {
   if (!this.isReversal(d)) {
     this.dx = d.dx;
     this.dy = d.dy;
-    console.log(`Turned ${name} now dx = ${this.dx}; dy = ${this.dy}`);
   }
 };
 
@@ -92,7 +95,12 @@ Snake.prototype.food = function (cell) {
   return this.get(cell) == foodColor;
 };
 
+
+
 Snake.prototype.update = function () {
+  if (this.turns.length > 0) {
+    this.applyTurn(this.turns.shift())
+  }
   let next = this.nextPosition();
   if (this.ok(next)) {
     if (!this.food(next)) {
@@ -130,7 +138,7 @@ function init() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   let snake = new Snake(grid);
-  snake.changeDirection("right");
+  snake.dx = 1;
   snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1));
   snake.addAtHead(snake.nextPosition())
   snake.addFood();
@@ -160,8 +168,6 @@ function animate(update, fps) {
   requestAnimationFrame(oneFrame);
 }
 
-
-
 const keys = {
   38: "up",
   40: "down",
@@ -177,7 +183,6 @@ function directionChanger(snake) {
       if (key == "space") {
         start(snake);
       } else {
-        console.log(key);
         snake.changeDirection(key);
       }
     } else {
