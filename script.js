@@ -53,12 +53,12 @@ Snake.prototype.set = function (cell, value) {
 };
 
 Snake.prototype.nextPosition = function () {
-  let cell = this.segments[(this.head + this.segments.length - 1) % this.segments.length];
-  return pos(cell.x + this.dx, cell.y + this.dy);
+  let head = this.getHead();
+  return pos(head.x + this.dx, head.y + this.dy);
 };
 
 Snake.prototype.getHead = function () {
-  return this.segments[this.head - 1];
+  return this.segments[(this.head + this.segments.length - 1) % this.segments.length];
 };
 
 Snake.prototype.getTail = function () {
