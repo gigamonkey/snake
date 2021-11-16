@@ -300,7 +300,7 @@ function init() {
   let snake = new Snake(grid);
   snake.dx = 1;
   snake.squaresPerSecond = 10;
-  snake.speedUp = 1.05;
+  snake.speedUp = 1.025;
   snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1), true);
   snake.addAtHead(snake.nextPosition(), true);
   snake.addRandomFood();
@@ -324,29 +324,8 @@ function nDigits(num, n) {
 }
 
 function start(snake) {
-  //animate(() => snake.update(), 10);
   animate((ts) => snake.animate(ts));
 }
-
-/*
-function animate(update, fps) {
-  let nextFrame;
-  const oneFrame = (timestamp) => {
-    if (nextFrame === undefined) {
-      nextFrame = timestamp;
-    }
-    if (timestamp >= nextFrame) {
-      nextFrame = nextFrame + 1000 / fps;
-      if (update()) {
-        requestAnimationFrame(oneFrame);
-      }
-    } else {
-      requestAnimationFrame(oneFrame);
-    }
-  };
-  requestAnimationFrame(oneFrame);
-}
-*/
 
 function animate(update) {
   const step = (timestamp) => {
