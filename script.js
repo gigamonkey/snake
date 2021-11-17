@@ -138,7 +138,7 @@ class Scorekeeper {
   }
 }
 
-class Snake {
+class Game {
   constructor(dimension) {
     this.grid = new Grid(dimension, grassColor);
     this.segments = Array(dimension * dimension).fill(null);
@@ -330,6 +330,7 @@ class Snake {
     this.scorekeeper.setBonusPoints(manhattanDistance(cell.x, cell.y, h.x, h.y) + 20);
   }
 }
+
 function partialFill(cell, direction, proportion, color) {
   let x = cell.x * size;
   let y = cell.y * size;
@@ -360,7 +361,7 @@ function init() {
   ctx.fillStyle = grassColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  let snake = new Snake(grid);
+  let snake = new Game(grid);
   snake.dx = 1;
   snake.squaresPerSecond = squaresPerSecond;
   snake.speedUp = speedUp;
