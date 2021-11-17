@@ -2,7 +2,10 @@ const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 const html = document.getElementsByTagName("html")[0];
 
-const size = 16;
+const size = 128;
+const squaresPerSecond = 2;
+const speedUp = 1;
+
 const grid = Math.floor(canvas.width / size);
 
 const grassColor = "green";
@@ -65,6 +68,14 @@ Snake.prototype.getTail = function () {
   return this.segments[this.tail];
 };
 
+Snake.prototype.dump = function () {
+  let r = [];
+  for (let i = 0; i < this.length(); i++) {
+    r.push(JSON.stringify(this.segments[(this.tail + i) % this.segments.length]));
+  }
+  return r.join(", ");
+};
+
 Snake.prototype.enterSquare = function (cell, timestamp, isFood) {
   this.enteredSquare = timestamp;
   this.isEating = isFood;
@@ -82,6 +93,7 @@ Snake.prototype.addAtHead = function (cell, draw) {
 };
 
 Snake.prototype.removeTail = function () {
+  let tail = this.segments[this.tail];
   this.drawCell(this.segments[this.tail], grassColor);
   this.tail = (this.tail + 1) % this.segments.length;
 };
@@ -149,8 +161,6 @@ function partialFill(cell, direction, proportion, color) {
     y += size * (1 - proportion);
     height *= proportion;
   }
-
-  //console.log(`Filling x: ${x}; y: ${y}; width: ${width}; height: ${height}; proportion: ${proportion}`);
 
   ctx.fillStyle = color;
   ctx.fillRect(x, y, width, height);
@@ -220,9 +230,8 @@ Snake.prototype.updateHead = function (timestamp) {
   let next = this.nextPosition();
 
   if (this.ok(next)) {
-    // Have to check if it's food before we draw the new head. But we
-    // want to draw the new head before we place the new random food
-    // so the snake is at its new length.
+    // Check if it's food before we enter the square but wait to place
+    // the new random food so the snake is at its new length.
     let nextIsFood = this.isFood(next);
 
     this.enterSquare(next, timestamp, nextIsFood);
@@ -233,32 +242,6 @@ Snake.prototype.updateHead = function (timestamp) {
       this.addRandomFood();
       this.updateScore();
       this.squaresPerSecond *= this.speedUp;
-    }
-    return true;
-  } else {
-    return false;
-  }
-};
-
-Snake.prototype.update = function () {
-  if (this.turns.length > 0) {
-    this.applyTurn(this.turns.shift());
-  }
-
-  let next = this.nextPosition();
-
-  if (this.ok(next)) {
-    // Have to check if it's food before we draw the new head. But we
-    // want to draw the new head before we place the new random food
-    // so the snake is at its new length.
-    let wasFood = this.isFood(next);
-
-    this.addAtHead(next);
-    if (!wasFood) {
-      this.removeTail();
-    } else {
-      this.addRandomFood();
-      this.updateScore();
     }
     return true;
   } else {
@@ -277,18 +260,26 @@ Snake.prototype.updateScore = function () {
   }
 };
 
-Snake.prototype.addRandomFood = function () {
-  let max = this.grid.length - this.length();
-  let n = Math.floor(Math.random() * max);
-  for (let i = 0; i < this.grid.length; i++) {
-    if (this.grid[i] == grassColor) {
-      n--;
+Snake.prototype.grassSquares = function () {
+  let count = 0;
+  for (let color of this.grid) {
+    if (color == grassColor) {
+      count++;
     }
-    if (n == 0) {
-      let x = Math.floor(i / this.dimension);
-      let y = i % this.dimension;
-      this.drawCell(pos(x, y), foodColor);
-      break;
+  }
+  return count;
+};
+
+Snake.prototype.addRandomFood = function () {
+  if (this.grassSquares() > 0) {
+    while (true) {
+      let i = Math.floor(Math.random() * this.grid.length);
+      if (this.grid[i] == grassColor) {
+        let x = Math.floor(i / this.dimension);
+        let y = i % this.dimension;
+        this.drawCell(pos(x, y), foodColor);
+        break;
+      }
     }
   }
 };
@@ -299,8 +290,8 @@ function init() {
 
   let snake = new Snake(grid);
   snake.dx = 1;
-  snake.squaresPerSecond = 10;
-  snake.speedUp = 1.025;
+  snake.squaresPerSecond = squaresPerSecond;
+  snake.speedUp = speedUp;
   snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1), true);
   snake.addAtHead(snake.nextPosition(), true);
   snake.addRandomFood();
