@@ -34,9 +34,70 @@ function pos(x, y) {
   return { x: x, y: y };
 }
 
+/*
+ * The grid of cells.
+ */
+class Grid {
+  constructor(dimension, initialValue) {
+    this.dimension = dimension;
+    this.cells = Array(dimension * dimension).fill(initialValue);
+  }
+
+  get(x, y) {
+    return this.cells[x * this.dimension + y];
+  }
+
+  set(x, y, value) {
+    this.cells[x * this.dimension + y] = value;
+  }
+
+  onGrid(x, y) {
+    return 0 <= x && x < this.dimension && 0 <= y && y < this.dimension;
+  }
+
+  count(value) {
+    let c = 0;
+    for (let color of this.cells) {
+      if (color == value) {
+        c++;
+      }
+    }
+    return c;
+  }
+
+  toXY(i) {
+    let x = Math.floor(i / this.dimension);
+    let y = i % this.dimension;
+    return { x: x, y: y };
+  }
+
+  randomCell(value) {
+    if (this.count(value) > 0) {
+      while (true) {
+        let i = Math.floor(Math.random() * this.cells.length);
+        if (this.cells[i] == value) {
+          return this.toXY(i);
+        }
+      }
+    }
+  }
+
+  isGrass(x, y) {
+    return this.get(x, y) == grassColor;
+  }
+
+  isFood(x, y) {
+    return this.get(x, y) == foodColor || this.isSuperFood(x, y);
+  }
+
+  isSuperFood(x, y) {
+    return this.get(x, y) == superFoodColor;
+  }
+}
+
 function Snake(dimension) {
   this.dimension = dimension;
-  this.grid = Array(dimension * dimension).fill(grassColor);
+  this.grid = new Grid(dimension, grassColor);
   this.segments = Array(dimension * dimension).fill(null);
   this.head = 0;
   this.tail = 0;
@@ -53,11 +114,11 @@ function Snake(dimension) {
 }
 
 Snake.prototype.get = function (cell) {
-  return this.grid[cell.x * this.dimension + cell.y];
+  return this.grid.get(cell.x, cell.y);
 };
 
 Snake.prototype.set = function (cell, value) {
-  this.grid[cell.x * this.dimension + cell.y] = value;
+  this.grid.set(cell.x, cell.y, value);
 };
 
 Snake.prototype.nextPosition = function () {
@@ -71,14 +132,6 @@ Snake.prototype.getHead = function () {
 
 Snake.prototype.getTail = function () {
   return this.segments[this.tail];
-};
-
-Snake.prototype.dump = function () {
-  let r = [];
-  for (let i = 0; i < this.length(); i++) {
-    r.push(JSON.stringify(this.segments[(this.tail + i) % this.segments.length]));
-  }
-  return r.join(", ");
 };
 
 Snake.prototype.enterSquare = function (cell, timestamp, isFood) {
@@ -167,17 +220,8 @@ function partialFill(cell, direction, proportion, color) {
 }
 
 Snake.prototype.ok = function (cell) {
-  let xOk = 0 <= cell.x && cell.x < this.dimension;
-  let yOk = 0 <= cell.y && cell.y < this.dimension;
-  return xOk && yOk && (this.get(cell) == grassColor || this.isFood(cell));
-};
-
-Snake.prototype.isFood = function (cell) {
-  return this.get(cell) == foodColor || this.isSuperFood(cell);
-};
-
-Snake.prototype.isSuperFood = function (cell) {
-  return this.get(cell) == superFoodColor;
+  let { x, y } = cell;
+  return this.grid.onGrid(x, y) && (this.grid.isGrass(x, y) || this.grid.isFood(x, y));
 };
 
 Snake.prototype.animate = function (timestamp) {
@@ -237,8 +281,8 @@ Snake.prototype.updateHead = function (timestamp) {
   if (this.ok(next)) {
     // Check if it's food before we enter the square but wait to place
     // the new random food so the snake is at its new length.
-    let nextIsFood = this.isFood(next);
-    let nextIsSuperfood = this.isSuperFood(next);
+    let nextIsFood = this.grid.isFood(next.x, next.y);
+    let nextIsSuperfood = this.grid.isSuperFood(next.x, next.y);
 
     this.enterSquare(next, timestamp, nextIsFood);
 
@@ -275,37 +319,17 @@ Snake.prototype.updateScore = function (score) {
   }
 };
 
-function grassSquares(grid) {
-  let count = 0;
-  for (let color of grid) {
-    if (color == grassColor) {
-      count++;
-    }
-  }
-  return count;
-};
-
 Snake.prototype.setBonusPoints = function (n) {
   this.bonusPoints = Math.max(0, n);
   updateBonusPoints(this.bonusPoints);
 };
 
 Snake.prototype.addRandomFood = function () {
-  if (grassSquares(this.grid) > 0) {
-    let placed = false;
-    while (!placed) {
-      let i = Math.floor(Math.random() * this.grid.length);
-      if (this.grid[i] == grassColor) {
-        let x = Math.floor(i / this.dimension);
-        let y = i % this.dimension;
-        let color = !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor;
-        let h = this.getHead();
-        this.setBonusPoints(manhattanDistance(x, y, h.x, h.y) + 20);
-        this.drawCell(pos(x, y), color);
-        placed = true;
-      }
-    }
-  }
+  let cell = this.grid.randomCell(grassColor);
+  this.drawCell(cell, !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor);
+
+  let h = this.getHead();
+  this.setBonusPoints(manhattanDistance(cell.x, cell.y, h.x, h.y) + 20);
 };
 
 function manhattanDistance(x1, y1, x2, y2) {
