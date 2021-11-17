@@ -95,8 +95,52 @@ class Grid {
   }
 }
 
+/*
+ * Keep track of the score and update listeners when it changes.
+ */
+class Scorekeeper {
+
+  constructor() {
+    this.score = 0;
+    this.bonusPoints = 0;
+    this.listeners = [];
+  }
+
+  addListener(listener) {
+    this.listeners.push(listener);
+    this.postScore(listener);
+    this.postBonusPoints(listener);
+  }
+
+  incrementScore() {
+    this.score += 1 + this.bonusPoints;
+    for (let listener of this.listeners) {
+      this.postScore(listener);
+    }
+  }
+
+  setBonusPoints(points) {
+    this.bonusPoints = Math.max(0, points);
+    for (let listener of this.listeners) {
+      this.postBonusPoints(listener);
+    }
+  }
+
+  decrementBonusPoints() {
+    this.setBonusPoints(this.bonusPoints - 1);
+  }
+
+  postScore(listener) {
+    listener.updateScore(this.score);
+  }
+
+  postBonusPoints(listener) {
+    listener.updateBonusPoints(this.score);
+  }
+}
+
+
 function Snake(dimension) {
-  this.dimension = dimension;
   this.grid = new Grid(dimension, grassColor);
   this.segments = Array(dimension * dimension).fill(null);
   this.head = 0;
@@ -104,13 +148,11 @@ function Snake(dimension) {
   this.dx = 0;
   this.dy = 0;
   this.turns = [];
-  this.listeners = [];
   this.enteredSquare = undefined;
   this.isEating = false;
   this.speedUp = 1;
-  this.score = 0;
+  this.scorekeeper = new Scorekeeper();
   this.boosted = false;
-  this.bonusPoints = 0;
 }
 
 Snake.prototype.get = function (cell) {
@@ -274,7 +316,7 @@ Snake.prototype.updateHead = function (timestamp) {
   if (this.turns.length > 0) {
     this.applyTurn(this.turns.shift());
   }
-  this.setBonusPoints(this.bonusPoints - 1);
+  this.scorekeeper.decrementBonusPoints();
 
   let next = this.nextPosition();
 
@@ -294,7 +336,7 @@ Snake.prototype.updateHead = function (timestamp) {
         this.boosted = false;
         this.squaresPerSecond /= boost;
       }
-      this.updateScore(this.score + 1 + this.bonusPoints);
+      this.scorekeeper.incrementScore();
       this.squaresPerSecond *= this.speedUp;
 
       // I.e. we're eating the food in the next square. Go ahead and
@@ -307,21 +349,8 @@ Snake.prototype.updateHead = function (timestamp) {
   }
 };
 
-Snake.prototype.addScoreListener = function (fn) {
-  this.listeners.push(fn);
-  this.updateScore(0);
-};
-
-Snake.prototype.updateScore = function (score) {
-  this.score = score;
-  for (let fn of this.listeners) {
-    fn(score);
-  }
-};
-
-Snake.prototype.setBonusPoints = function (n) {
-  this.bonusPoints = Math.max(0, n);
-  updateBonusPoints(this.bonusPoints);
+Snake.prototype.addScoreListener = function (listener) {
+  this.scorekeeper.addListener(listener);
 };
 
 Snake.prototype.addRandomFood = function () {
@@ -329,7 +358,7 @@ Snake.prototype.addRandomFood = function () {
   this.drawCell(cell, !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor);
 
   let h = this.getHead();
-  this.setBonusPoints(manhattanDistance(cell.x, cell.y, h.x, h.y) + 20);
+  this.scorekeeper.setBonusPoints(manhattanDistance(cell.x, cell.y, h.x, h.y) + 20);
 };
 
 function manhattanDistance(x1, y1, x2, y2) {
@@ -350,15 +379,16 @@ function init() {
 
   html.onkeydown = directionChanger(snake);
 
-  snake.addScoreListener((s) => {
-    document.getElementById("score").innerText = nDigits(s, 4);
+  snake.addScoreListener({
+    updateScore: function (score) {
+      document.getElementById("score").innerText = nDigits(score, 4);
+    },
+    updateBonusPoints: function (points) {
+      document.getElementById("bonus").innerText = nDigits(points, 3);
+    }
   });
 
   return snake;
-}
-
-function updateBonusPoints(n) {
-  document.getElementById("bonus").innerText = nDigits(n, 3);
 }
 
 function nDigits(num, n) {
