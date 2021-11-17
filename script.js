@@ -2,9 +2,9 @@ const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 const html = document.getElementsByTagName("html")[0];
 
-const size = 128;
-const squaresPerSecond = 2;
-const speedUp = 1;
+const size = 32;
+const squaresPerSecond = 8;
+const speedUp = 1.025;
 
 const grid = Math.floor(canvas.width / size);
 
