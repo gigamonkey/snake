@@ -2,7 +2,7 @@ const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 const html = document.getElementsByTagName("html")[0];
 
-const size = 32;
+const size = 16;
 const squaresPerSecond = 10;
 const speedUp = 1.025;
 const boost = 1.5;
@@ -150,20 +150,16 @@ function partialFill(cell, direction, proportion, color) {
   let width = size;
   let height = size;
 
-  if (direction.dx == 1) {
-    // Moving right.
+  if (direction.dx != 0) {
     width *= proportion;
-  } else if (direction.dx == -1) {
-    // Moving left
-    x += size * (1 - proportion);
-    width *= proportion;
-  } else if (direction.dy == 1) {
-    // Moving down.
+    if (direction.dx == -1) {
+      x += size * (1 - proportion);
+    }
+  } else if (direction.dy != 0) {
     height *= proportion;
-  } else if (direction.dy == -1) {
-    // Moving up.
-    y += size * (1 - proportion);
-    height *= proportion;
+    if (direction.dy == -1) {
+      y += size * (1 - proportion);
+    }
   }
 
   ctx.fillStyle = color;
