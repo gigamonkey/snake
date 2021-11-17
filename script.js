@@ -2,15 +2,17 @@ const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 const html = document.getElementsByTagName("html")[0];
 
-const size = 32;
-const squaresPerSecond = 8;
+const size = 16;
+const squaresPerSecond = 10;
 const speedUp = 1.025;
+const boost = 1.5;
 
 const grid = Math.floor(canvas.width / size);
 
 const grassColor = "green";
 const snakeColor = "purple";
 const foodColor = "red";
+const superFoodColor = "orange";
 
 const keys = {
   38: "up",
@@ -45,6 +47,8 @@ function Snake(dimension) {
   this.enteredSquare = undefined;
   this.isEating = false;
   this.speedUp = 1;
+  this.score = 0;
+  this.boosted = false;
 }
 
 Snake.prototype.get = function (cell) {
@@ -169,11 +173,15 @@ function partialFill(cell, direction, proportion, color) {
 Snake.prototype.ok = function (cell) {
   let xOk = 0 <= cell.x && cell.x < this.dimension;
   let yOk = 0 <= cell.y && cell.y < this.dimension;
-  return (xOk && yOk && this.get(cell) == grassColor) || this.get(cell) == foodColor;
+  return xOk && yOk && (this.get(cell) == grassColor || this.isFood(cell));
 };
 
 Snake.prototype.isFood = function (cell) {
-  return this.get(cell) == foodColor;
+  return this.get(cell) == foodColor || this.isSuperFood(cell);
+};
+
+Snake.prototype.isSuperFood = function (cell) {
+  return this.get(cell) == superFoodColor;
 };
 
 Snake.prototype.animate = function (timestamp) {
@@ -233,14 +241,22 @@ Snake.prototype.updateHead = function (timestamp) {
     // Check if it's food before we enter the square but wait to place
     // the new random food so the snake is at its new length.
     let nextIsFood = this.isFood(next);
+    let nextIsSuperfood = this.isSuperFood(next);
 
     this.enterSquare(next, timestamp, nextIsFood);
 
     if (nextIsFood) {
+      if (nextIsSuperfood) {
+        this.boosted = true;
+        this.squaresPerSecond *= boost;
+      } else if (nextIsFood && this.boosted) {
+        this.boosted = false;
+        this.squaresPerSecond /= boost;
+      }
       // I.e. we're eating the food in the next square. Go ahead and
       // add some new food elsewhere.
       this.addRandomFood();
-      this.updateScore();
+      this.updateScore(this.score + 1);
       this.squaresPerSecond *= this.speedUp;
     }
     return true;
@@ -251,12 +267,13 @@ Snake.prototype.updateHead = function (timestamp) {
 
 Snake.prototype.addScoreListener = function (fn) {
   this.listeners.push(fn);
-  this.updateScore();
+  this.updateScore(0);
 };
 
-Snake.prototype.updateScore = function () {
+Snake.prototype.updateScore = function (score) {
+  this.score = score;
   for (let fn of this.listeners) {
-    fn(this.length() - 2);
+    fn(score);
   }
 };
 
@@ -277,7 +294,8 @@ Snake.prototype.addRandomFood = function () {
       if (this.grid[i] == grassColor) {
         let x = Math.floor(i / this.dimension);
         let y = i % this.dimension;
-        this.drawCell(pos(x, y), foodColor);
+        let color = !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor;
+        this.drawCell(pos(x, y), color);
         break;
       }
     }
