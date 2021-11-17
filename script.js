@@ -2,7 +2,7 @@ const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 const html = document.getElementsByTagName("html")[0];
 
-const size = 16;
+const size = 32;
 const squaresPerSecond = 10;
 const speedUp = 1.025;
 const boost = 1.5;
@@ -49,6 +49,7 @@ function Snake(dimension) {
   this.speedUp = 1;
   this.score = 0;
   this.boosted = false;
+  this.bonusPoints = 0;
 }
 
 Snake.prototype.get = function (cell) {
@@ -97,7 +98,6 @@ Snake.prototype.addAtHead = function (cell, draw) {
 };
 
 Snake.prototype.removeTail = function () {
-  let tail = this.segments[this.tail];
   this.drawCell(this.segments[this.tail], grassColor);
   this.tail = (this.tail + 1) % this.segments.length;
 };
@@ -234,6 +234,7 @@ Snake.prototype.updateHead = function (timestamp) {
   if (this.turns.length > 0) {
     this.applyTurn(this.turns.shift());
   }
+  this.setBonusPoints(this.bonusPoints - 1);
 
   let next = this.nextPosition();
 
@@ -253,11 +254,12 @@ Snake.prototype.updateHead = function (timestamp) {
         this.boosted = false;
         this.squaresPerSecond /= boost;
       }
+      this.updateScore(this.score + 1 + this.bonusPoints);
+      this.squaresPerSecond *= this.speedUp;
+
       // I.e. we're eating the food in the next square. Go ahead and
       // add some new food elsewhere.
       this.addRandomFood();
-      this.updateScore(this.score + 1);
-      this.squaresPerSecond *= this.speedUp;
     }
     return true;
   } else {
@@ -287,20 +289,32 @@ Snake.prototype.grassSquares = function () {
   return count;
 };
 
+Snake.prototype.setBonusPoints = function (n) {
+  this.bonusPoints = Math.max(0, n);
+  updateBonusPoints(this.bonusPoints);
+};
+
 Snake.prototype.addRandomFood = function () {
   if (this.grassSquares() > 0) {
-    while (true) {
+    let placed = false;
+    while (!placed) {
       let i = Math.floor(Math.random() * this.grid.length);
       if (this.grid[i] == grassColor) {
         let x = Math.floor(i / this.dimension);
         let y = i % this.dimension;
         let color = !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor;
+        let h = this.getHead();
+        this.setBonusPoints(manhattanDistance(x, y, h.x, h.y) + 20);
         this.drawCell(pos(x, y), color);
-        break;
+        placed = true;
       }
     }
   }
 };
+
+function manhattanDistance(x1, y1, x2, y2) {
+  return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+}
 
 function init() {
   ctx.fillStyle = grassColor;
@@ -321,6 +335,10 @@ function init() {
   });
 
   return snake;
+}
+
+function updateBonusPoints(n) {
+  document.getElementById("bonus").innerText = nDigits(n, 3);
 }
 
 function nDigits(num, n) {
