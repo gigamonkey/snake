@@ -1,13 +1,7 @@
-const canvas = document.getElementById("screen");
-const ctx = canvas.getContext("2d");
-const html = document.getElementsByTagName("html")[0];
-
 const size = 16;
 const squaresPerSecond = 10;
 const speedUp = 1.025;
 const boost = 1.5;
-
-const grid = Math.floor(canvas.width / size);
 
 const grassColor = "green";
 const snakeColor = "purple";
@@ -211,14 +205,48 @@ class Scorekeeper {
 }
 
 class Game {
-  constructor(dimension) {
-    this.grid = new Grid(dimension, grassColor);
-    this.snake = new Snake(dimension);
+  constructor(dimension, canvas, html) {
+    this.dimension = dimension;
+    this.canvas = canvas;
+    this.ctx = this.canvas.getContext("2d");
+    this.running = false;
+    html.onkeydown = this.handleKeyEvent.bind(this);
+    this.reset();
+  }
+
+  reset() {
+    this.snake = new Snake(this.dimension);
+    this.grid = new Grid(this.dimension, grassColor);
+    this.running = false;
     this.scorekeeper = new Scorekeeper();
     this.enteredSquare = undefined;
     this.isEating = false;
     this.speedUp = 1;
     this.boosted = false;
+    this.squaresPerSecond = squaresPerSecond;
+    this.speedUp = speedUp;
+
+    let mid = this.dimension / 2 - 1;
+    this.ctx.fillStyle = grassColor;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.placeSnake(mid, mid, "right", 2);
+    this.addRandomFood();
+  }
+
+  start() {
+    this.running = true;
+    animate((ts) => this.update(ts));
+  }
+
+  handleKeyEvent(e) {
+    const key = keys[e.keyCode];
+    if (key == "space") {
+      this.start();
+    } else if (key == "rerun") {
+      this.reset();
+    } else {
+      this.snake.changeDirection(key);
+    }
   }
 
   enterSquare(cell, timestamp, isFood) {
@@ -229,7 +257,7 @@ class Game {
   }
 
   placeSnake(x, y, direction, length) {
-    this.snake.addAtHead({ x: x, y: y});
+    this.snake.addAtHead({ x: x, y: y });
     this.snake.changeDirection(direction);
     this.snake.applyNextTurn();
     for (let i = 0; i < length - 1; i++) {
@@ -245,18 +273,18 @@ class Game {
 
   drawCell(cell, color) {
     this.grid.set(cell.x, cell.y, color);
-    ctx.fillStyle = color;
-    ctx.fillRect(cell.x * size, cell.y * size, size, size);
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(cell.x * size, cell.y * size, size, size);
   }
 
   drawPartialHead(proportion) {
-    partialFill(this.snake.getHead(), this.snake, proportion, snakeColor);
+    this.partialFill(this.snake.getHead(), this.snake, proportion, snakeColor);
   }
 
   erasePartialTail(proportion) {
     let tail = this.snake.getTail();
     let direction = this.snake.getTailDirection();
-    partialFill(tail, direction, proportion, grassColor);
+    this.partialFill(tail, direction, proportion, grassColor);
   }
 
   ok(cell) {
@@ -264,7 +292,8 @@ class Game {
     return this.grid.onGrid(x, y) && (this.grid.isGrass(x, y) || this.grid.isFood(x, y));
   }
 
-  animate(timestamp) {
+  update(timestamp) {
+    if (!this.running) return false;
     // When we completely fill a cell, then we check the next position
     // to see if we're crashing into something. If not, then we check to
     // see if we're going to be eating food.
@@ -305,10 +334,10 @@ class Game {
   updateHead(timestamp) {
     // Called when we have completely filled the current cell. Figure
     // out the next position and add it as the head but don't fill it in
-    // immediately. Instead animate() will progressively fill it in.
-    // When it is filled in then animate will call this function again
+    // immediately. Instead update() will progressively fill it in.
+    // When it is filled in then update will call this function again
     // to get the next head position after applying the next queued
-    // turn. This method still returns false if we crash and animate
+    // turn. This method still returns false if we crash and update
     // needs to propagate that out
 
     this.snake.applyNextTurn();
@@ -356,56 +385,41 @@ class Game {
     let h = this.snake.getHead();
     this.scorekeeper.setBonusPoints(manhattanDistance(cell.x, cell.y, h.x, h.y) + 20);
   }
+
+  partialFill(cell, direction, proportion, color) {
+    let x = cell.x * size;
+    let y = cell.y * size;
+    let width = size;
+    let height = size;
+
+    if (direction.dx != 0) {
+      width *= proportion;
+      if (direction.dx == -1) {
+        x += size * (1 - proportion);
+      }
+    } else if (direction.dy != 0) {
+      height *= proportion;
+      if (direction.dy == -1) {
+        y += size * (1 - proportion);
+      }
+    }
+
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(x, y, width, height);
+  }
 }
 
-function partialFill(cell, direction, proportion, color) {
-  let x = cell.x * size;
-  let y = cell.y * size;
-  let width = size;
-  let height = size;
-
-  if (direction.dx != 0) {
-    width *= proportion;
-    if (direction.dx == -1) {
-      x += size * (1 - proportion);
-    }
-  } else if (direction.dy != 0) {
-    height *= proportion;
-    if (direction.dy == -1) {
-      y += size * (1 - proportion);
-    }
+class UI {
+  updateScore(score) {
+    document.getElementById("score").innerText = nDigits(score, 4);
   }
-
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, width, height);
+  updateBonusPoints(points) {
+    document.getElementById("bonus").innerText = nDigits(points, 3);
+  }
 }
 
 function manhattanDistance(x1, y1, x2, y2) {
   return Math.abs(x1 - x2) + Math.abs(y1 - y2);
-}
-
-function init() {
-  ctx.fillStyle = grassColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  let game = new Game(grid);
-  game.placeSnake(grid / 2 - 1, grid / 2 - 1, "right", 2);
-  game.squaresPerSecond = squaresPerSecond;
-  game.speedUp = speedUp;
-  game.addRandomFood();
-
-  html.onkeydown = directionChanger(game);
-
-  game.addScoreListener({
-    updateScore: function (score) {
-      document.getElementById("score").innerText = nDigits(score, 4);
-    },
-    updateBonusPoints: function (points) {
-      document.getElementById("bonus").innerText = nDigits(points, 3);
-    },
-  });
-
-  return game;
 }
 
 function nDigits(num, n) {
@@ -417,10 +431,6 @@ function nDigits(num, n) {
   );
 }
 
-function start(game) {
-  animate((ts) => game.animate(ts));
-}
-
 function animate(update) {
   const step = (timestamp) => {
     if (update(timestamp)) {
@@ -430,21 +440,12 @@ function animate(update) {
   requestAnimationFrame(step);
 }
 
-function directionChanger(game) {
-  return (e) => {
-    if (e.keyCode in keys) {
-      const key = keys[e.keyCode];
-      if (key == "space") {
-        start(game);
-      } else if (key == "rerun") {
-        game = init();
-      } else {
-        game.snake.changeDirection(key);
-      }
-    } else {
-      console.log(e.keyCode);
-    }
-  };
+function init() {
+  let canvas = document.getElementById("screen");
+  let html = document.getElementsByTagName("html")[0];
+  let gridSize = Math.floor(canvas.width / size);
+  let game = new Game(gridSize, canvas, html);
+  game.addScoreListener(new UI());
 }
 
 window.onload = () => init();
