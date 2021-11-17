@@ -30,10 +30,6 @@ const directions = {
   right: { dx: 1, dy: 0 },
 };
 
-function pos(x, y) {
-  return { x: x, y: y };
-}
-
 /*
  * The grid of cells.
  */
@@ -65,12 +61,6 @@ class Grid {
     return c;
   }
 
-  toXY(i) {
-    let x = Math.floor(i / this.dimension);
-    let y = i % this.dimension;
-    return { x: x, y: y };
-  }
-
   randomCell(value) {
     if (this.count(value) > 0) {
       while (true) {
@@ -80,6 +70,10 @@ class Grid {
         }
       }
     }
+  }
+
+  toXY(i) {
+    return { x: Math.floor(i / this.dimension), y: i % this.dimension };
   }
 
   isGrass(x, y) {
@@ -116,6 +110,12 @@ class Snake {
     return this.segments[this.tail];
   }
 
+  map(fn) {
+    for (let i = this.tail; i != this.head; i = (i + 1) % this.segments.length) {
+      fn(this.segments[i]);
+    }
+  }
+
   getTailDirection() {
     let tail = this.getTail();
     let nextCell = this.segments[(this.tail + 1) % this.segments.length];
@@ -132,7 +132,11 @@ class Snake {
 
   nextPosition() {
     let head = this.getHead();
-    return pos(head.x + this.dx, head.y + this.dy);
+    return { x: head.x + this.dx, y: head.y + this.dy };
+  }
+
+  extend() {
+    this.addAtHead(this.nextPosition());
   }
 
   addAtHead(cell) {
@@ -210,26 +214,28 @@ class Game {
   constructor(dimension) {
     this.grid = new Grid(dimension, grassColor);
     this.snake = new Snake(dimension);
+    this.scorekeeper = new Scorekeeper();
     this.enteredSquare = undefined;
     this.isEating = false;
     this.speedUp = 1;
-    this.scorekeeper = new Scorekeeper();
     this.boosted = false;
   }
 
   enterSquare(cell, timestamp, isFood) {
     this.enteredSquare = timestamp;
     this.isEating = isFood;
-    this.addAtHead(cell, false);
+    this.snake.addAtHead(cell);
+    this.grid.set(cell.x, cell.y, snakeColor); // Set this even though we will fill it in in bits.
   }
 
-  addAtHead(cell, draw) {
-    this.snake.addAtHead(cell);
-    if (draw) {
-      this.drawCell(cell, snakeColor);
-    } else {
-      this.grid.set(cell.x, cell.y, snakeColor); // Set this even though we will fill it in in bits.
+  placeSnake(x, y, direction, length) {
+    this.snake.addAtHead({ x: x, y: y});
+    this.snake.changeDirection(direction);
+    this.snake.applyNextTurn();
+    for (let i = 0; i < length - 1; i++) {
+      this.snake.extend();
     }
+    this.snake.map((cell) => this.drawCell(cell, snakeColor));
   }
 
   removeTail() {
@@ -383,9 +389,7 @@ function init() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   let game = new Game(grid);
-  game.addAtHead(pos(grid / 2 - 1, grid / 2 - 1), true);
-  game.addAtHead(game.snake.nextPosition(), true);
-
+  game.placeSnake(grid / 2 - 1, grid / 2 - 1, "right", 2);
   game.squaresPerSecond = squaresPerSecond;
   game.speedUp = speedUp;
   game.addRandomFood();
