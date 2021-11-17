@@ -96,6 +96,74 @@ class Grid {
 }
 
 /*
+ * The snake itself.
+ */
+class Snake {
+  constructor(dimension) {
+    this.segments = Array(dimension * dimension).fill(null);
+    this.head = 0;
+    this.tail = 0;
+    this.dx = 1;
+    this.dy = 0;
+    this.turns = [];
+  }
+
+  getHead() {
+    return this.segments[(this.head + this.segments.length - 1) % this.segments.length];
+  }
+
+  getTail() {
+    return this.segments[this.tail];
+  }
+
+  getTailDirection() {
+    let tail = this.getTail();
+    let nextCell = this.segments[(this.tail + 1) % this.segments.length];
+    return {
+      dx: nextCell.x - tail.x,
+      dy: nextCell.y - tail.y,
+    };
+  }
+
+  length() {
+    let max = this.segments.length;
+    return (max + (this.head - this.tail)) % max;
+  }
+
+  nextPosition() {
+    let head = this.getHead();
+    return pos(head.x + this.dx, head.y + this.dy);
+  }
+
+  addAtHead(cell) {
+    this.segments[this.head] = cell;
+    this.head = (this.head + 1) % this.segments.length;
+  }
+
+  removeTail() {
+    this.tail = (this.tail + 1) % this.segments.length;
+  }
+
+  changeDirection(name) {
+    this.turns.push(directions[name]);
+  }
+
+  applyNextTurn() {
+    if (this.turns.length > 0) {
+      let d = this.turns.shift();
+      if (!this.isReversal(d)) {
+        this.dx = d.dx;
+        this.dy = d.dy;
+      }
+    }
+  }
+
+  isReversal(d) {
+    return this.dx * -1 == d.dx && this.dy * -1 == d.dy;
+  }
+}
+
+/*
  * Keep track of the score and update listeners when it changes.
  */
 class Scorekeeper {
@@ -134,19 +202,14 @@ class Scorekeeper {
   }
 
   postBonusPoints(listener) {
-    listener.updateBonusPoints(this.score);
+    listener.updateBonusPoints(this.bonusPoints);
   }
 }
 
 class Game {
   constructor(dimension) {
     this.grid = new Grid(dimension, grassColor);
-    this.segments = Array(dimension * dimension).fill(null);
-    this.head = 0;
-    this.tail = 0;
-    this.dx = 0;
-    this.dy = 0;
-    this.turns = [];
+    this.snake = new Snake(dimension);
     this.enteredSquare = undefined;
     this.isEating = false;
     this.speedUp = 1;
@@ -154,28 +217,14 @@ class Game {
     this.boosted = false;
   }
 
-  nextPosition() {
-    let head = this.getHead();
-    return pos(head.x + this.dx, head.y + this.dy);
-  }
-
-  getHead() {
-    return this.segments[(this.head + this.segments.length - 1) % this.segments.length];
-  }
-
-  getTail() {
-    return this.segments[this.tail];
-  }
-
   enterSquare(cell, timestamp, isFood) {
     this.enteredSquare = timestamp;
     this.isEating = isFood;
-    this.addAtHead(cell);
+    this.addAtHead(cell, false);
   }
 
   addAtHead(cell, draw) {
-    this.segments[this.head] = cell;
-    this.head = (this.head + 1) % this.segments.length;
+    this.snake.addAtHead(cell);
     if (draw) {
       this.drawCell(cell, snakeColor);
     } else {
@@ -184,28 +233,8 @@ class Game {
   }
 
   removeTail() {
-    this.drawCell(this.segments[this.tail], grassColor);
-    this.tail = (this.tail + 1) % this.segments.length;
-  }
-
-  length() {
-    let max = this.segments.length;
-    return (max + (this.head - this.tail)) % max;
-  }
-
-  changeDirection(name) {
-    this.turns.push(directions[name]);
-  }
-
-  applyTurn(d) {
-    if (!this.isReversal(d)) {
-      this.dx = d.dx;
-      this.dy = d.dy;
-    }
-  }
-
-  isReversal(d) {
-    return this.dx * -1 == d.dx && this.dy * -1 == d.dy;
+    this.drawCell(this.snake.getTail(), grassColor);
+    this.snake.removeTail();
   }
 
   drawCell(cell, color) {
@@ -215,18 +244,12 @@ class Game {
   }
 
   drawPartialHead(proportion) {
-    partialFill(this.getHead(), this, proportion, snakeColor);
+    partialFill(this.snake.getHead(), this.snake, proportion, snakeColor);
   }
 
   erasePartialTail(proportion) {
-    let tail = this.getTail();
-    let nextCell = this.segments[(this.tail + 1) % this.segments.length];
-
-    let direction = {
-      dx: nextCell.x - tail.x,
-      dy: nextCell.y - tail.y,
-    };
-
+    let tail = this.snake.getTail();
+    let direction = this.snake.getTailDirection();
     partialFill(tail, direction, proportion, grassColor);
   }
 
@@ -258,7 +281,7 @@ class Game {
       let proportion = (timeInSquare * this.squaresPerSecond) / 1000;
       if (proportion >= 1) {
         // We have completely filled in the head.
-        this.drawCell(this.getHead(), snakeColor);
+        this.drawCell(this.snake.getHead(), snakeColor);
         if (!this.isEating) {
           this.removeTail();
         }
@@ -282,12 +305,10 @@ class Game {
     // turn. This method still returns false if we crash and animate
     // needs to propagate that out
 
-    if (this.turns.length > 0) {
-      this.applyTurn(this.turns.shift());
-    }
+    this.snake.applyNextTurn();
     this.scorekeeper.decrementBonusPoints();
 
-    let next = this.nextPosition();
+    let next = this.snake.nextPosition();
 
     if (this.ok(next)) {
       // Check if it's food before we enter the square but wait to place
@@ -326,7 +347,7 @@ class Game {
     let cell = this.grid.randomCell(grassColor);
     this.drawCell(cell, !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor);
 
-    let h = this.getHead();
+    let h = this.snake.getHead();
     this.scorekeeper.setBonusPoints(manhattanDistance(cell.x, cell.y, h.x, h.y) + 20);
   }
 }
@@ -361,17 +382,17 @@ function init() {
   ctx.fillStyle = grassColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  let snake = new Game(grid);
-  snake.dx = 1;
-  snake.squaresPerSecond = squaresPerSecond;
-  snake.speedUp = speedUp;
-  snake.addAtHead(pos(grid / 2 - 1, grid / 2 - 1), true);
-  snake.addAtHead(snake.nextPosition(), true);
-  snake.addRandomFood();
+  let game = new Game(grid);
+  game.addAtHead(pos(grid / 2 - 1, grid / 2 - 1), true);
+  game.addAtHead(game.snake.nextPosition(), true);
 
-  html.onkeydown = directionChanger(snake);
+  game.squaresPerSecond = squaresPerSecond;
+  game.speedUp = speedUp;
+  game.addRandomFood();
 
-  snake.addScoreListener({
+  html.onkeydown = directionChanger(game);
+
+  game.addScoreListener({
     updateScore: function (score) {
       document.getElementById("score").innerText = nDigits(score, 4);
     },
@@ -380,7 +401,7 @@ function init() {
     },
   });
 
-  return snake;
+  return game;
 }
 
 function nDigits(num, n) {
@@ -392,8 +413,8 @@ function nDigits(num, n) {
   );
 }
 
-function start(snake) {
-  animate((ts) => snake.animate(ts));
+function start(game) {
+  animate((ts) => game.animate(ts));
 }
 
 function animate(update) {
@@ -405,16 +426,16 @@ function animate(update) {
   requestAnimationFrame(step);
 }
 
-function directionChanger(snake) {
+function directionChanger(game) {
   return (e) => {
     if (e.keyCode in keys) {
       const key = keys[e.keyCode];
       if (key == "space") {
-        start(snake);
+        start(game);
       } else if (key == "rerun") {
-        snake = init();
+        game = init();
       } else {
-        snake.changeDirection(key);
+        game.snake.changeDirection(key);
       }
     } else {
       console.log(e.keyCode);
