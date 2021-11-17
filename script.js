@@ -275,9 +275,9 @@ Snake.prototype.updateScore = function (score) {
   }
 };
 
-Snake.prototype.grassSquares = function () {
+function grassSquares(grid) {
   let count = 0;
-  for (let color of this.grid) {
+  for (let color of grid) {
     if (color == grassColor) {
       count++;
     }
@@ -291,7 +291,7 @@ Snake.prototype.setBonusPoints = function (n) {
 };
 
 Snake.prototype.addRandomFood = function () {
-  if (this.grassSquares() > 0) {
+  if (grassSquares(this.grid) > 0) {
     let placed = false;
     while (!placed) {
       let i = Math.floor(Math.random() * this.grid.length);
