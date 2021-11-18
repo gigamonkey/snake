@@ -169,49 +169,33 @@ class Snake {
  * Keep track of the score and update listeners when it changes.
  */
 class Scorekeeper {
-  constructor() {
+  constructor(ui) {
+    this.ui = ui;
     this.score = 0;
     this.bonusPoints = 0;
     this.listeners = [];
   }
 
-  addListener(listener) {
-    this.listeners.push(listener);
-    this.postScore(listener);
-    this.postBonusPoints(listener);
-  }
-
   incrementScore() {
     this.score += 1 + this.bonusPoints;
-    for (let listener of this.listeners) {
-      this.postScore(listener);
-    }
+    this.ui.updateScore(this.score);
   }
 
   setBonusPoints(points) {
     this.bonusPoints = Math.max(0, points);
-    for (let listener of this.listeners) {
-      this.postBonusPoints(listener);
-    }
+    this.ui.updateBonusPoints(this.bonusPoints);
   }
 
   decrementBonusPoints() {
     this.setBonusPoints(this.bonusPoints - 1);
   }
-
-  postScore(listener) {
-    listener.updateScore(this.score);
-  }
-
-  postBonusPoints(listener) {
-    listener.updateBonusPoints(this.bonusPoints);
-  }
 }
 
 class Game {
-  constructor(dimension, canvas, html) {
+  constructor(dimension, canvas, html, ui) {
     this.dimension = dimension;
     this.canvas = canvas;
+    this.ui = ui;
     this.ctx = this.canvas.getContext("2d");
     this.running = false;
     html.onkeydown = this.handleKeyEvent.bind(this);
@@ -222,13 +206,14 @@ class Game {
     this.snake = new Snake(this.dimension);
     this.grid = new Grid(this.dimension, grassColor);
     this.running = false;
-    this.scorekeeper = new Scorekeeper();
+    this.scorekeeper = new Scorekeeper(this.ui);
     this.enteredSquare = undefined;
     this.isEating = false;
     this.speedUp = 1;
     this.boosted = false;
     this.squaresPerSecond = squaresPerSecond;
     this.speedUp = speedUp;
+    this.foodCell = null;
 
     let mid = this.dimension / 2 - 1;
     this.ctx.fillStyle = grassColor;
@@ -378,19 +363,18 @@ class Game {
     }
   }
 
-  addScoreListener(listener) {
-    this.scorekeeper.addListener(listener);
-  }
-
   addRandomFood() {
     let cell = this.grid.randomCell(grassColor);
-    let color = !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor;
-    this.drawCell(cell, color);
+    if (cell) {
+      let color = !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor;
+      this.drawCell(cell, color);
 
-    let h = this.snake.getHead();
-    let dist = manhattanDistance(cell.x, cell.y, h.x, h.y);
-    let bonus = color == foodColor ? 20 : 60;
-    this.scorekeeper.setBonusPoints(dist + bonus);
+      let h = this.snake.getHead();
+      let dist = manhattanDistance(cell.x, cell.y, h.x, h.y);
+      let bonus = color == foodColor ? 20 : 60;
+      this.scorekeeper.setBonusPoints(dist + bonus);
+      this.foodCell = cell;
+    }
   }
 
   partialFill(cell, direction, proportion, color) {
@@ -451,8 +435,7 @@ function init() {
   let canvas = document.getElementById("screen");
   let html = document.getElementsByTagName("html")[0];
   let gridSize = Math.floor(canvas.width / size);
-  let game = new Game(gridSize, canvas, html);
-  game.addScoreListener(new UI());
+  new Game(gridSize, canvas, html, new UI());
 }
 
 window.onload = () => init();
