@@ -33,6 +33,7 @@ class Grid {
     this.cells = Array(dimension * dimension).fill(initialValue);
   }
 
+  // Whoops. This is apparently column major order. Which works. But was not what I meant.
   get(x, y) {
     return this.cells[x * this.dimension + y];
   }
@@ -70,6 +71,10 @@ class Grid {
     return { x: Math.floor(i / this.dimension), y: i % this.dimension };
   }
 
+  fromXY(cell) {
+    return cell.x * this.dimension + cell.y;
+  }
+
   isGrass(x, y) {
     return this.get(x, y) == grassColor;
   }
@@ -81,6 +86,32 @@ class Grid {
   isSuperFood(x, y) {
     return this.get(x, y) == superFoodColor;
   }
+
+  xneighbors(i) {
+    let ns = [];
+    let [x, y] = [Math.floor(i / this.dimension), this.dimension];
+
+    if (x > 0) ns.push(i - this.dimension);
+    if (x < this.dimension - 1) ns.push(i + this.dimension);
+    if (y > 0) ns.push(i - 1);
+    if (y < this.dimension - 1) ns.push(i + 1);
+    return ns;
+  }
+
+  neighbors(i) {
+    let ns = [];
+    let {x, y} = this.toXY(i);
+
+    if (x > 0) ns.push({x: x - 1, y: y});
+    if (x < this.dimension - 1) ns.push({x: x + 1, y: y});
+    if (y > 0) ns.push({x: x, y: y - 1});
+    if (y < this.dimension - 1) ns.push({x: x, y: y + 1});
+
+    return ns.map((d) => this.fromXY(d));
+  }
+
+
+
 }
 
 /*
@@ -150,6 +181,7 @@ class Snake {
     while (this.turns.length > 0) {
       let d = this.turns.shift();
       if (this.isLegalTurn(d)) {
+        //console.log("Applying turn " + JSON.stringify(d) + " at " + JSON.stringify(this.getHead()) + " remaining turns: " + JSON.stringify(this.turns));
         this.dx = d.dx;
         this.dy = d.dy;
         return;
@@ -192,7 +224,7 @@ class Scorekeeper {
 }
 
 class Game {
-  constructor(dimension, canvas, html, ui) {
+  constructor(dimension, canvas, html, ui, ai) {
     this.dimension = dimension;
     this.canvas = canvas;
     this.ui = ui;
@@ -205,6 +237,7 @@ class Game {
   reset() {
     this.snake = new Snake(this.dimension);
     this.grid = new Grid(this.dimension, grassColor);
+    this.ai = new AI(this.grid, this.snake);
     this.running = false;
     this.scorekeeper = new Scorekeeper(this.ui);
     this.enteredSquare = undefined;
@@ -213,13 +246,12 @@ class Game {
     this.boosted = false;
     this.squaresPerSecond = squaresPerSecond;
     this.speedUp = speedUp;
-    this.foodCell = null;
 
     let mid = this.dimension / 2 - 1;
     this.ctx.fillStyle = grassColor;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.placeSnake(mid, mid, "right", 2);
-    this.addRandomFood();
+    this.foodCell = this.addRandomFood();
   }
 
   start() {
@@ -309,6 +341,11 @@ class Game {
         if (!this.isEating) {
           this.removeTail();
         }
+        let move = this.ai.move(this.foodCell);
+        if (move !== null) {
+          //console.log("Pushing " + JSON.stringify(move) + " onto " + JSON.stringify(this.snake.turns));
+          this.snake.turns.push(move);
+        }
         return this.updateHead(timestamp);
       } else {
         this.drawPartialHead(proportion);
@@ -328,6 +365,8 @@ class Game {
     // to get the next head position after applying the next queued
     // turn. This method still returns false if we crash and update
     // needs to propagate that out
+
+    //console.log("updateHead (" + timestamp + ") " + JSON.stringify(this.snake.turns));
 
     this.snake.applyNextTurn();
     this.scorekeeper.decrementBonusPoints();
@@ -355,7 +394,7 @@ class Game {
 
         // I.e. we're eating the food in the next square. Go ahead and
         // add some new food elsewhere.
-        this.addRandomFood();
+        this.foodCell = this.addRandomFood();
       }
       return true;
     } else {
@@ -373,8 +412,9 @@ class Game {
       let dist = manhattanDistance(cell.x, cell.y, h.x, h.y);
       let bonus = color == foodColor ? 20 : 60;
       this.scorekeeper.setBonusPoints(dist + bonus);
-      this.foodCell = cell;
+      return cell;
     }
+    return null;
   }
 
   partialFill(cell, direction, proportion, color) {
@@ -408,6 +448,88 @@ class UI {
     document.getElementById("bonus").innerText = nDigits(points, 3);
   }
 }
+
+function j(x) { return JSON.stringify(x); }
+
+class AI {
+
+  constructor(grid, snake) {
+    this.grid = grid;
+    this.snake = snake;
+  }
+
+  move(foodCell) {
+    let tailSet = this.tailSet();
+    let head = this.snake.getHead();
+    let next = this.snake.nextPosition()
+
+    function dir(a, b) {
+      return a === b ? 0 : (a > b ? 1 : -1);
+    }
+
+    // If can turn toward food.
+    let desired = {
+      dx: dir(foodCell.x, head.x),
+      dy: dir(foodCell.y, head.y),
+    }
+
+    //console.log(`desired: ${j(desired)}; current: ${j({x: this.snake.dx, y: this.snake.dy})}`);
+
+    if (foodCell.x == head.x) {
+      return desired;
+    } else if (foodCell.y == head.y) {
+      return desired;
+    }
+
+    if (this.grid.onGrid(next.x, next.y) && (tailSet.has(this.grid.fromXY(next)) || (next.x == foodCell.x && next.y == foodCell.y))) {
+      //console.log("next: " + j(next) + " in tailSet. No move.")
+      return null;
+    } else {
+      let ok = [];
+      for (let n of this.grid.neighbors(this.grid.fromXY(head))) {
+        //console.log("Checking " + JSON.stringify(this.grid.toXY(n)));
+        if (tailSet.has(n)) {
+          ok.push(n);
+        }
+      }
+      //console.log("ok: " + JSON.stringify(ok.map((i) => this.grid.toXY(i))));
+      let cell = this.grid.toXY(ok[Math.floor(Math.random() * ok.length)]);
+      let move = {dx: cell.x - head.x, dy: cell.y - head.y};
+      //console.log("Move: " + JSON.stringify(move));
+      return move;
+    }
+  }
+
+  tailSet() {
+    let tail = this.grid.fromXY(this.snake.getTail());
+    let set = new Set();
+    for (let n of this.grid.neighbors(tail)) {
+      //console.log(`Got neighbor of tail ${n}`);
+      this.walk(n, set);
+    }
+    return set;
+  }
+
+  walk(i, set) {
+    if (this.grid.cells[i] == grassColor && !set.has(i)) {
+      let cell = this.grid.toXY(i);
+      if (cell.x < 0 || cell.y < 0) {
+        throw new Error(j(cell));
+      }
+      set.add(i);
+      for (let n of this.grid.neighbors(i)) {
+        //console.log(`Got neighbor ${n}`);
+        this.walk(n, set);
+      }
+    } else {
+      //console.log(`${i} ${this.grid.cells[i]} and in set: ${set.has(i)}`)
+    }
+    return set;
+  }
+
+}
+
+
 
 function manhattanDistance(x1, y1, x2, y2) {
   return Math.abs(x1 - x2) + Math.abs(y1 - y2);
