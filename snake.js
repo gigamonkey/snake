@@ -147,17 +147,21 @@ class Snake {
   }
 
   applyNextTurn() {
-    if (this.turns.length > 0) {
+    while (this.turns.length > 0) {
       let d = this.turns.shift();
-      if (!this.isReversal(d)) {
+      if (this.isLegalTurn(d)) {
         this.dx = d.dx;
         this.dy = d.dy;
+        return;
       }
     }
   }
 
-  isReversal(d) {
-    return this.dx * -1 == d.dx && this.dy * -1 == d.dy;
+  isLegalTurn(d) {
+    // Can only turn left or right. In current direction one of dx and
+    // dy will be zero before the turn and the opposite coordinate
+    // will be zero after.
+    return this.dx == d.dy || this.dy == d.dx;
   }
 }
 
@@ -244,7 +248,7 @@ class Game {
       this.start();
     } else if (key == "rerun") {
       this.reset();
-    } else {
+    } else if (key in directions) {
       this.snake.changeDirection(key);
     }
   }
@@ -380,10 +384,13 @@ class Game {
 
   addRandomFood() {
     let cell = this.grid.randomCell(grassColor);
-    this.drawCell(cell, !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor);
+    let color = !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor;
+    this.drawCell(cell, color);
 
     let h = this.snake.getHead();
-    this.scorekeeper.setBonusPoints(manhattanDistance(cell.x, cell.y, h.x, h.y) + 20);
+    let dist = manhattanDistance(cell.x, cell.y, h.x, h.y);
+    let bonus = color == foodColor ? 20 : 60;
+    this.scorekeeper.setBonusPoints(dist + bonus);
   }
 
   partialFill(cell, direction, proportion, color) {
