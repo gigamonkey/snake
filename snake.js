@@ -1,8 +1,10 @@
-const size = 16;
-const squaresPerSecond = 10;
-const speedUp = 1.025;
+const debug = false;
+
+const size = 32;
+const squaresPerSecond = 6;
+const speedUp = 1.01;
 const boost = 1.5;
-const autoBoost = 5;
+const autoBoost = 1;
 
 const grassColor = "green";
 const snakeColor = "purple";
@@ -482,11 +484,8 @@ class AI {
     this.snake = snake;
   }
 
-  cellOk(cell, tailSet, foodCell) {
-    return (
-      this.grid.onGrid(cell.x, cell.y) &&
-      (tailSet.has(this.grid.fromXY(cell)) || (cell.x == foodCell.x && cell.y == foodCell.y))
-    );
+  cellOk(cell, tailSet) {
+    return this.grid.onGrid(cell.x, cell.y) && tailSet.has(this.grid.fromXY(cell));
   }
 
   move(foodCell) {
@@ -518,30 +517,44 @@ class AI {
 
     if (turn !== null) {
       let afterTurn = { x: head.x + turn.dx, y: head.y + turn.dy };
-      if (this.cellOk(afterTurn, tailSet, foodCell)) {
+      if (this.cellOk(afterTurn, tailSet)) {
         return turn;
       }
     }
 
-    if (this.cellOk(next, tailSet, foodCell)) {
-      //console.log("next: " + j(next) + " in tailSet. No move.")
+    if (this.cellOk(next, tailSet)) {
       return null;
     } else {
       let ok = [];
+      let empty = [];
       for (let n of this.grid.neighbors(this.grid.fromXY(head))) {
-        //console.log("Checking " + JSON.stringify(this.grid.toXY(n)));
         if (tailSet.has(n)) {
           ok.push(n);
+        } else if (this.grid.cells[n] !== snakeColor) {
+          empty.push(n);
         }
       }
-      if (ok.length == 0) {
+
+      if (ok.length == 0 && empty.length == 0) {
         console.log("No where to go");
         return null;
       } else {
-        //console.log("ok: " + JSON.stringify(ok.map((i) => this.grid.toXY(i))));
-        let cell = this.grid.toXY(ok[Math.floor(Math.random() * ok.length)]);
-        let move = { dx: cell.x - head.x, dy: cell.y - head.y };
-        //console.log("Move: " + JSON.stringify(move));
+        let choices = ok.length > 0 ? ok : empty;
+        let tail = this.snake.getTail();
+
+        let farthest;
+        let max = -Infinity;
+
+        for (let c of choices) {
+          let cell = this.grid.toXY(c);
+          let d = manhattanDistance(cell.x, cell.y, tail.x, tail.y);
+          if (d > max) {
+            max = d;
+            farthest = cell;
+          }
+        }
+
+        let move = { dx: farthest.x - head.x, dy: farthest.y - head.y };
         return move;
       }
     }
@@ -593,8 +606,10 @@ function animate(update) {
     if (update(timestamp)) {
       requestAnimationFrame(step);
     } else {
-      game.drawCell(game.snake.getHead(), "black");
-      game.drawCell(game.snake.getTail(), "white");
+      if (debug) {
+        game.drawCell(game.snake.getHead(), "black");
+        game.drawCell(game.snake.getTail(), "white");
+      }
     }
   };
   requestAnimationFrame(step);
