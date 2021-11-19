@@ -37,7 +37,8 @@ class Grid {
     this.cells = Array(dimension * dimension).fill(initialValue);
   }
 
-  // Whoops. This is apparently column major order. Which works. But was not what I meant.
+  // Whoops. This is apparently column major order. Which works. But
+  // was not what I meant to do.
   get(x, y) {
     return this.cells[x * this.dimension + y];
   }
@@ -91,27 +92,15 @@ class Grid {
     return this.get(x, y) == superFoodColor;
   }
 
-  xneighbors(i) {
-    let ns = [];
-    let [x, y] = [Math.floor(i / this.dimension), this.dimension];
+  neighbors(i) {
+    let { x, y } = this.toXY(i);
 
+    let ns = [];
     if (x > 0) ns.push(i - this.dimension);
     if (x < this.dimension - 1) ns.push(i + this.dimension);
     if (y > 0) ns.push(i - 1);
     if (y < this.dimension - 1) ns.push(i + 1);
     return ns;
-  }
-
-  neighbors(i) {
-    let ns = [];
-    let { x, y } = this.toXY(i);
-
-    if (x > 0) ns.push({ x: x - 1, y: y });
-    if (x < this.dimension - 1) ns.push({ x: x + 1, y: y });
-    if (y > 0) ns.push({ x: x, y: y - 1 });
-    if (y < this.dimension - 1) ns.push({ x: x, y: y + 1 });
-
-    return ns.map((d) => this.fromXY(d));
   }
 }
 
