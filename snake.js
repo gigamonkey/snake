@@ -284,7 +284,9 @@ class Game {
     } else if (key == "automatic") {
       this.toggleAutomatic();
     } else if (key in directions) {
-      this.snake.changeDirection(key);
+      if (!this.automatic) {
+        this.snake.changeDirection(key);
+      }
     } else {
       console.log(e.keyCode);
     }
