@@ -443,20 +443,20 @@ class Game {
   }
 
   partialFill(cell, direction, proportion, color) {
-    let x = cell.x * size;
-    let y = cell.y * size;
-    let width = size;
-    let height = size;
+    let x = (cell.x * size) + 1;
+    let y = (cell.y * size) + 1;
+    let width = size - 2;
+    let height = size - 2;
 
     if (direction.dx != 0) {
       width *= proportion;
       if (direction.dx == -1) {
-        x += size * (1 - proportion);
+        x += (size - 2) * (1 - proportion);
       }
     } else if (direction.dy != 0) {
       height *= proportion;
       if (direction.dy == -1) {
-        y += size * (1 - proportion);
+        y += (size - 2) * (1 - proportion);
       }
     }
 
