@@ -40,11 +40,11 @@ class Grid {
   // Whoops. This is apparently column major order. Which works. But
   // was not what I meant to do.
   get(x, y) {
-    return this.cells[x * this.dimension + y];
+    return this.cells[this.fromXY(x, y)];
   }
 
   set(x, y, value) {
-    this.cells[x * this.dimension + y] = value;
+    this.cells[this.fromXY(x, y)] = value;
   }
 
   onGrid(x, y) {
@@ -76,8 +76,12 @@ class Grid {
     return { x: Math.floor(i / this.dimension), y: i % this.dimension };
   }
 
-  fromXY(cell) {
-    return cell.x * this.dimension + cell.y;
+  fromCell(cell) {
+    return this.fromXY(cell.x, cell.y);
+  }
+
+  fromXY(x, y) {
+    return x * this.dimension + y;
   }
 
   isGrass(x, y) {
@@ -434,8 +438,8 @@ class Game {
   }
 
   partialFill(cell, direction, proportion, color) {
-    let x = (cell.x * size) + 1;
-    let y = (cell.y * size) + 1;
+    let x = cell.x * size + 1;
+    let y = cell.y * size + 1;
     let width = size - 2;
     let height = size - 2;
 
@@ -469,113 +473,74 @@ function j(x) {
   return JSON.stringify(x);
 }
 
+function gradient(grid, x, y) {
+  let g = Array(grid.cells.length).fill(Infinity);
+
+  let stack = [];
+  let seen = new Set();
+  let i = grid.fromXY(x, y);
+
+  stack.push({ i: i, d: 0 });
+  seen.add(i);
+
+  while (stack.length > 0) {
+    let { i, d } = stack.shift();
+    g[i] = d;
+    for (let n of grid.neighbors(i)) {
+      if (!seen.has(n) && grid.cells[n] !== snakeColor) {
+        stack.push({ i: n, d: d + 1 });
+        seen.add(n);
+      }
+    }
+  }
+  return g;
+}
+
 class AI {
   constructor(grid, snake) {
     this.grid = grid;
     this.snake = snake;
   }
 
-  cellOk(cell, tailSet) {
-    return this.grid.onGrid(cell.x, cell.y) && tailSet.has(this.grid.fromXY(cell));
-  }
-
-  move(foodCell) {
-    let tailSet = this.tailSet();
+  move(food) {
     let head = this.snake.getHead();
-    let next = this.snake.nextPosition();
+    let tail = this.snake.getTail();
 
-    function toward(a, b) {
-      return a === b ? 0 : a > b ? 1 : -1;
-    }
+    let tailGradient = gradient(this.grid, tail.x, tail.y);
+    let foodGradient = gradient(this.grid, food.x, food.y);
 
-    // Direction we'd like to go toward food.
-    let goal = {
-      dx: toward(foodCell.x, head.x),
-      dy: toward(foodCell.y, head.y),
-    };
-
-    let current = this.snake.direction();
-
-    let xAway = goal.dx * current.dx == -1;
-    let yAway = goal.dy * current.dy == -1;
-
-    let turn = null;
-    if (xAway || goal.dx == 0) {
-      turn = { dx: 0, dy: goal.dy };
-    } else if (yAway || goal.dy == 0) {
-      turn = { dx: goal.dx, dy: 0 };
-    }
-
-    if (turn !== null) {
-      let afterTurn = { x: head.x + turn.dx, y: head.y + turn.dy };
-      if (this.cellOk(afterTurn, tailSet)) {
-        return turn;
-      }
-    }
-
-    if (this.cellOk(next, tailSet)) {
-      return null;
-    } else {
-      let ok = [];
-      let empty = [];
-      for (let n of this.grid.neighbors(this.grid.fromXY(head))) {
-        if (tailSet.has(n)) {
-          ok.push(n);
-        } else if (this.grid.cells[n] !== snakeColor) {
-          empty.push(n);
-        }
-      }
-
-      if (ok.length == 0 && empty.length == 0) {
-        console.log("No where to go");
-        return null;
+    function better(n, current) {
+      if (current == null || tailGradient[current] === Infinity) {
+        return true;
+      } else if (tailGradient[n] === Infinity) {
+        return false;
+      } else if (foodGradient[n] < foodGradient[current]) {
+        return true;
+      } else if (foodGradient[n] == foodGradient[current]) {
+        return tailGradient[n] > tailGradient[current];
       } else {
-        let choices = ok.length > 0 ? ok : empty;
-        let tail = this.snake.getTail();
+        return false;
+      }
+    }
 
-        let farthest;
-        let max = -Infinity;
-
-        for (let c of choices) {
-          let cell = this.grid.toXY(c);
-          let d = manhattanDistance(cell.x, cell.y, tail.x, tail.y);
-          if (d > max) {
-            max = d;
-            farthest = cell;
-          }
+    let choice = null;
+    for (let n of this.grid.neighbors(this.grid.fromCell(head))) {
+      if (this.grid.cells[n] !== snakeColor) {
+        if (better(n, choice)) {
+          choice = n;
         }
-
-        let move = { dx: farthest.x - head.x, dy: farthest.y - head.y };
-        return move;
       }
     }
-  }
-
-  tailSet() {
-    let tail = this.grid.fromXY(this.snake.getTail());
-    let set = new Set();
-    for (let n of this.grid.neighbors(tail)) {
-      //console.log(`Got neighbor of tail ${n}`);
-      this.walk(n, set);
+    if (choice == null) {
+      throw new Error("Can't find any move at all.");
     }
-    return set;
-  }
 
-  walk(i, set) {
-    if (this.grid.cells[i] !== snakeColor && !set.has(i)) {
-      let cell = this.grid.toXY(i);
-      if (cell.x < 0 || cell.y < 0) {
-        throw new Error(j(cell));
-      }
-      set.add(i);
-      for (let n of this.grid.neighbors(i)) {
-        //console.log(`Got neighbor ${n}`);
-        this.walk(n, set);
-      }
-    } else {
-      //console.log(`${i} ${this.grid.cells[i]} and in set: ${set.has(i)}`)
-    }
-    return set;
+    let to = this.grid.toXY(choice);
+
+    return {
+      dx: toward(to.x, head.x),
+      dy: toward(to.y, head.y),
+    };
   }
 }
 
@@ -604,6 +569,18 @@ function animate(update) {
     }
   };
   requestAnimationFrame(step);
+}
+
+function setEquals(s1, s2) {
+  return [...s1].every((item) => s2.has(item)) && [...s2].every((item) => s1.has(item));
+}
+
+function setDifference(s1, s2) {
+  return new Set([...s1].filter((x) => !s2.has(x)));
+}
+
+function toward(a, b) {
+  return a === b ? 0 : a > b ? 1 : -1;
 }
 
 var game;
