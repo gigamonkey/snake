@@ -2,6 +2,7 @@ const size = 16;
 const squaresPerSecond = 10;
 const speedUp = 1.025;
 const boost = 1.5;
+const autoBoost = 5;
 
 const grassColor = "green";
 const snakeColor = "purple";
@@ -15,6 +16,7 @@ const keys = {
   39: "right",
   32: "space",
   82: "rerun",
+  65: "automatic",
 };
 
 const directions = {
@@ -100,18 +102,15 @@ class Grid {
 
   neighbors(i) {
     let ns = [];
-    let {x, y} = this.toXY(i);
+    let { x, y } = this.toXY(i);
 
-    if (x > 0) ns.push({x: x - 1, y: y});
-    if (x < this.dimension - 1) ns.push({x: x + 1, y: y});
-    if (y > 0) ns.push({x: x, y: y - 1});
-    if (y < this.dimension - 1) ns.push({x: x, y: y + 1});
+    if (x > 0) ns.push({ x: x - 1, y: y });
+    if (x < this.dimension - 1) ns.push({ x: x + 1, y: y });
+    if (y > 0) ns.push({ x: x, y: y - 1 });
+    if (y < this.dimension - 1) ns.push({ x: x, y: y + 1 });
 
     return ns.map((d) => this.fromXY(d));
   }
-
-
-
 }
 
 /*
@@ -139,6 +138,10 @@ class Snake {
     for (let i = this.tail; i != this.head; i = (i + 1) % this.segments.length) {
       fn(this.segments[i]);
     }
+  }
+
+  direction() {
+    return { dx: this.dx, dy: this.dy };
   }
 
   getTailDirection() {
@@ -224,7 +227,7 @@ class Scorekeeper {
 }
 
 class Game {
-  constructor(dimension, canvas, html, ui, ai) {
+  constructor(dimension, canvas, html, ui) {
     this.dimension = dimension;
     this.canvas = canvas;
     this.ui = ui;
@@ -246,12 +249,23 @@ class Game {
     this.boosted = false;
     this.squaresPerSecond = squaresPerSecond;
     this.speedUp = speedUp;
+    this.automatic = false;
 
     let mid = this.dimension / 2 - 1;
     this.ctx.fillStyle = grassColor;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this.placeSnake(mid, mid, "right", 2);
     this.foodCell = this.addRandomFood();
+  }
+
+  toggleAutomatic() {
+    if (this.automatic) {
+      this.automatic = false;
+      this.squaresPerSecond /= autoBoost;
+    } else {
+      this.automatic = true;
+      this.squaresPerSecond *= autoBoost;
+    }
   }
 
   start() {
@@ -265,8 +279,12 @@ class Game {
       this.start();
     } else if (key == "rerun") {
       this.reset();
+    } else if (key == "automatic") {
+      this.toggleAutomatic();
     } else if (key in directions) {
       this.snake.changeDirection(key);
+    } else {
+      console.log(e.keyCode);
     }
   }
 
@@ -294,8 +312,12 @@ class Game {
 
   drawCell(cell, color) {
     this.grid.set(cell.x, cell.y, color);
-    this.ctx.fillStyle = color;
+    this.ctx.fillStyle = grassColor;
     this.ctx.fillRect(cell.x * size, cell.y * size, size, size);
+    if (color !== grassColor) {
+      this.ctx.fillStyle = color;
+      this.ctx.fillRect(cell.x * size + 1, cell.y * size + 1, size - 2, size - 2);
+    }
   }
 
   drawPartialHead(proportion) {
@@ -341,10 +363,11 @@ class Game {
         if (!this.isEating) {
           this.removeTail();
         }
-        let move = this.ai.move(this.foodCell);
-        if (move !== null) {
-          //console.log("Pushing " + JSON.stringify(move) + " onto " + JSON.stringify(this.snake.turns));
-          this.snake.turns.push(move);
+        if (this.automatic) {
+          let move = this.ai.move(this.foodCell);
+          if (move !== null) {
+            this.snake.turns.push(move);
+          }
         }
         return this.updateHead(timestamp);
       } else {
@@ -449,39 +472,58 @@ class UI {
   }
 }
 
-function j(x) { return JSON.stringify(x); }
+function j(x) {
+  return JSON.stringify(x);
+}
 
 class AI {
-
   constructor(grid, snake) {
     this.grid = grid;
     this.snake = snake;
   }
 
+  cellOk(cell, tailSet, foodCell) {
+    return (
+      this.grid.onGrid(cell.x, cell.y) &&
+      (tailSet.has(this.grid.fromXY(cell)) || (cell.x == foodCell.x && cell.y == foodCell.y))
+    );
+  }
+
   move(foodCell) {
     let tailSet = this.tailSet();
     let head = this.snake.getHead();
-    let next = this.snake.nextPosition()
+    let next = this.snake.nextPosition();
 
-    function dir(a, b) {
-      return a === b ? 0 : (a > b ? 1 : -1);
+    function toward(a, b) {
+      return a === b ? 0 : a > b ? 1 : -1;
     }
 
-    // If can turn toward food.
-    let desired = {
-      dx: dir(foodCell.x, head.x),
-      dy: dir(foodCell.y, head.y),
+    // Direction we'd like to go toward food.
+    let goal = {
+      dx: toward(foodCell.x, head.x),
+      dy: toward(foodCell.y, head.y),
+    };
+
+    let current = this.snake.direction();
+
+    let xAway = goal.dx * current.dx == -1;
+    let yAway = goal.dy * current.dy == -1;
+
+    let turn = null;
+    if (xAway || goal.dx == 0) {
+      turn = { dx: 0, dy: goal.dy };
+    } else if (yAway || goal.dy == 0) {
+      turn = { dx: goal.dx, dy: 0 };
     }
 
-    //console.log(`desired: ${j(desired)}; current: ${j({x: this.snake.dx, y: this.snake.dy})}`);
-
-    if (foodCell.x == head.x) {
-      return desired;
-    } else if (foodCell.y == head.y) {
-      return desired;
+    if (turn !== null) {
+      let afterTurn = { x: head.x + turn.dx, y: head.y + turn.dy };
+      if (this.cellOk(afterTurn, tailSet, foodCell)) {
+        return turn;
+      }
     }
 
-    if (this.grid.onGrid(next.x, next.y) && (tailSet.has(this.grid.fromXY(next)) || (next.x == foodCell.x && next.y == foodCell.y))) {
+    if (this.cellOk(next, tailSet, foodCell)) {
       //console.log("next: " + j(next) + " in tailSet. No move.")
       return null;
     } else {
@@ -492,11 +534,16 @@ class AI {
           ok.push(n);
         }
       }
-      //console.log("ok: " + JSON.stringify(ok.map((i) => this.grid.toXY(i))));
-      let cell = this.grid.toXY(ok[Math.floor(Math.random() * ok.length)]);
-      let move = {dx: cell.x - head.x, dy: cell.y - head.y};
-      //console.log("Move: " + JSON.stringify(move));
-      return move;
+      if (ok.length == 0) {
+        console.log("No where to go");
+        return null;
+      } else {
+        //console.log("ok: " + JSON.stringify(ok.map((i) => this.grid.toXY(i))));
+        let cell = this.grid.toXY(ok[Math.floor(Math.random() * ok.length)]);
+        let move = { dx: cell.x - head.x, dy: cell.y - head.y };
+        //console.log("Move: " + JSON.stringify(move));
+        return move;
+      }
     }
   }
 
@@ -511,7 +558,7 @@ class AI {
   }
 
   walk(i, set) {
-    if (this.grid.cells[i] == grassColor && !set.has(i)) {
+    if (this.grid.cells[i] !== snakeColor && !set.has(i)) {
       let cell = this.grid.toXY(i);
       if (cell.x < 0 || cell.y < 0) {
         throw new Error(j(cell));
@@ -526,10 +573,7 @@ class AI {
     }
     return set;
   }
-
 }
-
-
 
 function manhattanDistance(x1, y1, x2, y2) {
   return Math.abs(x1 - x2) + Math.abs(y1 - y2);
@@ -548,16 +592,21 @@ function animate(update) {
   const step = (timestamp) => {
     if (update(timestamp)) {
       requestAnimationFrame(step);
+    } else {
+      game.drawCell(game.snake.getHead(), "black");
+      game.drawCell(game.snake.getTail(), "white");
     }
   };
   requestAnimationFrame(step);
 }
 
+var game;
+
 function init() {
   let canvas = document.getElementById("screen");
   let html = document.getElementsByTagName("html")[0];
   let gridSize = Math.floor(canvas.width / size);
-  new Game(gridSize, canvas, html, new UI());
+  game = new Game(gridSize, canvas, html, new UI());
 }
 
 window.onload = () => init();
