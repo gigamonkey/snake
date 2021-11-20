@@ -4,7 +4,7 @@ const size = 32;
 const squaresPerSecond = 6;
 const speedUp = 1.01;
 const boost = 1.5;
-const autoBoost = 1;
+const autoBoost = 2;
 
 const grassColor = "green";
 const snakeColor = "purple";
@@ -459,6 +459,7 @@ class UI {
 function move(grid, snake, food) {
   let head = snake.getHead();
   let tail = snake.getTail();
+  let next = snake.nextPosition();
 
   let tailGradient = gradient(grid, tail.x, tail.y);
   let foodGradient = gradient(grid, food.x, food.y);
@@ -477,7 +478,10 @@ function move(grid, snake, food) {
     }
   }
 
-  let choice = null;
+  // Default to continuing in the current direction and then see if we
+  // can find something better.
+  let nextIndex = grid.fromCell(next);
+  let choice = grid.onGrid(next) ? nextIndex : null;
   for (let n of grid.neighbors(grid.fromCell(head))) {
     if (grid.cells[n] !== snakeColor) {
       if (better(n, choice)) {
@@ -485,14 +489,15 @@ function move(grid, snake, food) {
       }
     }
   }
-  if (choice != null) {
+
+  if (choice == nextIndex || choice == null) {
+    return null;
+  } else {
     let { x, y } = grid.toXY(choice);
     return {
       dx: toward(x, head.x),
       dy: toward(y, head.y),
     };
-  } else {
-    return null;
   }
 }
 
