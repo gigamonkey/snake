@@ -118,8 +118,7 @@ class Snake {
     this.segments = Array(dimension * dimension).fill(null);
     this.head = 0;
     this.tail = 0;
-    this.dx = 1;
-    this.dy = 0;
+    this.direction = { dx: 1, dy: 0 };
     this.turns = [];
   }
 
@@ -135,10 +134,6 @@ class Snake {
     for (let i = this.tail; i != this.head; i = (i + 1) % this.segments.length) {
       fn(this.segments[i]);
     }
-  }
-
-  direction() {
-    return { dx: this.dx, dy: this.dy };
   }
 
   getTailDirection() {
@@ -157,7 +152,8 @@ class Snake {
 
   nextPosition() {
     let head = this.getHead();
-    return { x: head.x + this.dx, y: head.y + this.dy };
+    let { dx, dy } = this.direction;
+    return { x: head.x + dx, y: head.y + dy };
   }
 
   extend() {
@@ -181,8 +177,7 @@ class Snake {
     while (this.turns.length > 0) {
       let d = this.turns.shift();
       if (this.isLegalTurn(d)) {
-        this.dx = d.dx;
-        this.dy = d.dy;
+        this.direction = d;
         return;
       }
     }
@@ -192,7 +187,8 @@ class Snake {
     // Can only turn left or right. In current direction one of dx and
     // dy will be zero before the turn and the opposite coordinate
     // will be zero after.
-    return this.dx == d.dy || this.dy == d.dx;
+    let { dx, dy } = this.direction;
+    return dx == d.dy || dy == d.dx;
   }
 }
 
@@ -318,7 +314,7 @@ class Game {
   }
 
   drawPartialHead(proportion) {
-    this.partialFill(this.snake.getHead(), this.snake, proportion, snakeColor);
+    this.partialFill(this.snake.getHead(), this.snake.direction, proportion, snakeColor);
   }
 
   erasePartialTail(proportion) {
