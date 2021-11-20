@@ -37,17 +37,16 @@ class Grid {
     this.cells = Array(dimension * dimension).fill(initialValue);
   }
 
-  // Whoops. This is apparently column major order. Which works. But
-  // was not what I meant to do.
-  get(x, y) {
-    return this.cells[this.fromXY(x, y)];
+  getCell(cell) {
+    return this.cells[this.fromCell(cell)];
   }
 
-  set(x, y, value) {
-    this.cells[this.fromXY(x, y)] = value;
+  setCell(cell, value) {
+    this.cells[this.fromCell(cell)] = value;
   }
 
-  onGrid(x, y) {
+  onGrid(cell) {
+    let { x, y } = cell;
     return 0 <= x && x < this.dimension && 0 <= y && y < this.dimension;
   }
 
@@ -81,24 +80,25 @@ class Grid {
   }
 
   fromXY(x, y) {
+    // Whoops. This is apparently column major order. Which works. But
+    // was not what I meant to do.
     return x * this.dimension + y;
   }
 
-  isGrass(x, y) {
-    return this.get(x, y) == grassColor;
+  isGrass(cell) {
+    return this.getCell(cell) == grassColor;
   }
 
-  isFood(x, y) {
-    return this.get(x, y) == foodColor || this.isSuperFood(x, y);
+  isFood(cell) {
+    return this.getCell(cell) == foodColor || this.isSuperFood(cell);
   }
 
-  isSuperFood(x, y) {
-    return this.get(x, y) == superFoodColor;
+  isSuperFood(cell) {
+    return this.getCell(cell) == superFoodColor;
   }
 
   neighbors(i) {
     let { x, y } = this.toXY(i);
-
     let ns = [];
     if (x > 0) ns.push(i - this.dimension);
     if (x < this.dimension - 1) ns.push(i + this.dimension);
@@ -109,7 +109,9 @@ class Grid {
 }
 
 /*
- * The snake itself.
+ * The snake itself. We use a circular buffer since we need to add at
+ * one end and remove at the other. Could just use a regular array
+ * with push and shift but shift is technically O(n).
  */
 class Snake {
   constructor(dimension) {
@@ -179,7 +181,6 @@ class Snake {
     while (this.turns.length > 0) {
       let d = this.turns.shift();
       if (this.isLegalTurn(d)) {
-        //console.log("Applying turn " + JSON.stringify(d) + " at " + JSON.stringify(this.getHead()) + " remaining turns: " + JSON.stringify(this.turns));
         this.dx = d.dx;
         this.dy = d.dy;
         return;
@@ -288,7 +289,7 @@ class Game {
     this.enteredSquare = timestamp;
     this.isEating = isFood;
     this.snake.addAtHead(cell);
-    this.grid.set(cell.x, cell.y, snakeColor); // Set this even though we will fill it in in bits.
+    this.grid.setCell(cell, snakeColor); // Set this even though we will fill it in in bits.
   }
 
   placeSnake(x, y, direction, length) {
@@ -307,7 +308,7 @@ class Game {
   }
 
   drawCell(cell, color) {
-    this.grid.set(cell.x, cell.y, color);
+    this.grid.setCell(cell, color);
     this.ctx.fillStyle = grassColor;
     this.ctx.fillRect(cell.x * size, cell.y * size, size, size);
     if (color !== grassColor) {
@@ -327,8 +328,7 @@ class Game {
   }
 
   ok(cell) {
-    let { x, y } = cell;
-    return this.grid.onGrid(x, y) && (this.grid.isGrass(x, y) || this.grid.isFood(x, y));
+    return this.grid.onGrid(cell) && (this.grid.isGrass(cell) || this.grid.isFood(cell));
   }
 
   update(timestamp) {
@@ -377,15 +377,11 @@ class Game {
   }
 
   updateHead(timestamp) {
-    // Called when we have completely filled the current cell. Figure
-    // out the next position and add it as the head but don't fill it in
+    // Called when we are entering a new cell. Figure out the next
+    // position and add it as the head but don't fill it in
     // immediately. Instead update() will progressively fill it in.
-    // When it is filled in then update will call this function again
-    // to get the next head position after applying the next queued
-    // turn. This method still returns false if we crash and update
-    // needs to propagate that out
-
-    //console.log("updateHead (" + timestamp + ") " + JSON.stringify(this.snake.turns));
+    // When it is completely filled in then this method will be called
+    // again to get the next head position.
 
     this.snake.applyNextTurn();
     this.scorekeeper.decrementBonusPoints();
@@ -395,8 +391,8 @@ class Game {
     if (this.ok(next)) {
       // Check if it's food before we enter the square but wait to place
       // the new random food so the snake is at its new length.
-      let nextIsFood = this.grid.isFood(next.x, next.y);
-      let nextIsSuperfood = this.grid.isSuperFood(next.x, next.y);
+      let nextIsFood = this.grid.isFood(next);
+      let nextIsSuperfood = this.grid.isSuperFood(next);
 
       this.enterSquare(next, timestamp, nextIsFood);
 
@@ -566,6 +562,8 @@ function animate(update) {
   requestAnimationFrame(step);
 }
 
+// Stash this is the global object so we can inspect it in the console
+// REPL.
 var game;
 
 function init() {
