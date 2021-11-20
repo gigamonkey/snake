@@ -7,10 +7,10 @@ const boost = 1.5;
 const autoBoost = 2;
 
 // Colors from https://blog.datawrapper.de/colorblindness-part2/#Colorblind-safe-color-palettes
-const grassColor = 'rgba(74, 155, 119)';
-const snakeColor = 'rgb(52, 114, 170)';
-const foodColor = 'rgb(219, 160, 76)';
-const superFoodColor = 'rgb(239, 227, 109)';
+const grassColor = "rgba(74, 155, 119)";
+const snakeColor = "rgb(52, 114, 170)";
+const foodColor = "rgb(219, 160, 76)";
+const superFoodColor = "rgb(239, 227, 109)";
 
 const keys = {
   38: "up",
@@ -226,7 +226,8 @@ class Game {
     this.canvas = canvas;
     this.ui = ui;
     this.ctx = this.canvas.getContext("2d");
-    html.onkeydown = this.handleKeyEvent.bind(this);
+    html.onkeydown = this.handleEvent.bind(this);
+    html.onpointerdown = this.handleEvent.bind(this);
     this.reset();
   }
 
@@ -265,22 +266,27 @@ class Game {
     animate((ts) => this.update(ts));
   }
 
-  handleKeyEvent(e) {
-    const key = keys[e.keyCode];
-    if (key == "space") {
-      this.start();
-    } else if (key == "rerun") {
-      this.reset();
-    } else if (key == "automatic") {
+  handleEvent(e) {
+    if (e.type == "pointerdown") {
       this.toggleAutomatic();
       if (!this.running) this.start();
-    } else if (key in directions) {
-      if (!this.automatic) {
-        if (!this.running) this.start();
-        this.snake.changeDirection(key);
-      }
     } else {
-      //console.log(e.keyCode);
+      const key = keys[e.keyCode];
+      if (key == "space") {
+        this.start();
+      } else if (key == "rerun") {
+        this.reset();
+      } else if (key == "automatic") {
+        this.toggleAutomatic();
+        if (!this.running) this.start();
+      } else if (key in directions) {
+        if (!this.automatic) {
+          if (!this.running) this.start();
+          this.snake.changeDirection(key);
+        }
+      } else {
+        //console.log(e.keyCode);
+      }
     }
   }
 
