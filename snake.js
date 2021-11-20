@@ -470,10 +470,20 @@ function move(grid, snake, food) {
   let tailGradient = gradient(grid, tail.x, tail.y);
   let foodGradient = gradient(grid, food.x, food.y);
 
-  function better(n, current) {
-    if (current == null || tailGradient[current] === Infinity) {
+  function ok(n) {
+    if (n == null || tailGradient[n] === Infinity) {
+      return false;
+    } else if (foodGradient[n] == 0 && tailGradient[n] == 1) {
+      return false;
+    } else {
       return true;
-    } else if (tailGradient[n] === Infinity) {
+    }
+  }
+
+  function better(n, current) {
+    if (!ok(current)) {
+      return true;
+    } else if (!ok(n)) {
       return false;
     } else if (foodGradient[n] < foodGradient[current]) {
       return true;
