@@ -86,7 +86,6 @@ class Grid {
     return this.fromXY(cell.x, cell.y);
   }
 
-
   isTraversable(cell) {
     return this.onGrid(cell) && this.getCell(cell) !== snakeColor;
   }
@@ -113,7 +112,7 @@ class Grid {
 /*
  * The snake itself. We use a circular buffer since we need to add at
  * one end and remove at the other. Could just use a regular array
- * with push and shift but shift is technically O(n).
+ * with push and shift but shift is O(n).
  */
 class Snake {
   constructor(dimension) {
@@ -226,7 +225,6 @@ class Game {
     this.canvas = canvas;
     this.ui = ui;
     this.ctx = this.canvas.getContext("2d");
-    this.running = false;
     html.onkeydown = this.handleKeyEvent.bind(this);
     this.reset();
   }
@@ -274,12 +272,14 @@ class Game {
       this.reset();
     } else if (key == "automatic") {
       this.toggleAutomatic();
+      if (!this.running) this.start();
     } else if (key in directions) {
       if (!this.automatic) {
+        if (!this.running) this.start();
         this.snake.changeDirection(key);
       }
     } else {
-      console.log(e.keyCode);
+      //console.log(e.keyCode);
     }
   }
 
@@ -287,7 +287,9 @@ class Game {
     this.enteredSquare = timestamp;
     this.isEating = isFood;
     this.snake.addAtHead(cell);
-    this.grid.setCell(cell, snakeColor); // Set this even though we will fill it in in bits.
+    // Set this now even though we will visually fill it in a bit at a
+    // time.
+    this.grid.setCell(cell, snakeColor);
   }
 
   placeSnake(x, y, direction, length) {
@@ -326,7 +328,7 @@ class Game {
   }
 
   update(timestamp) {
-    // Handle one animation frame. Most of the time this is just
+    // Handle one animation frame. Most of the time this just works on
     // filling in the current head and erasing the current tail.
     // However once we've completely filled the head, we call
     // updateHead to handle turning, detect crashes, etc.
