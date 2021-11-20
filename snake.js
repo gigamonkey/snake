@@ -86,8 +86,9 @@ class Grid {
     return this.fromXY(cell.x, cell.y);
   }
 
-  isGrass(cell) {
-    return this.getCell(cell) == grassColor;
+
+  isTraversable(cell) {
+    return this.onGrid(cell) && this.getCell(cell) !== snakeColor;
   }
 
   isFood(cell) {
@@ -324,10 +325,6 @@ class Game {
     this.partialFill(tail, direction, proportion, grassColor);
   }
 
-  ok(cell) {
-    return this.grid.onGrid(cell) && (this.grid.isGrass(cell) || this.grid.isFood(cell));
-  }
-
   update(timestamp) {
     // Handle one animation frame. Most of the time this is just
     // filling in the current head and erasing the current tail.
@@ -377,7 +374,7 @@ class Game {
 
     let next = this.snake.nextPosition();
 
-    if (this.ok(next)) {
+    if (this.grid.isTraversable(next)) {
       // Check if it's food before we enter the square but wait to place
       // the new random food so the snake is at its new length.
       let nextIsFood = this.grid.isFood(next);
