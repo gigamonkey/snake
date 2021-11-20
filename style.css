@@ -20,6 +20,9 @@ h1 {
     font-size: 64px;
 }
 
+p {
+    padding: 0.5em;
+}
 
 #score {
     padding: 0;
