@@ -6,10 +6,11 @@ const speedUp = 1.01;
 const boost = 1.5;
 const autoBoost = 2;
 
-const grassColor = "green";
-const snakeColor = "purple";
-const foodColor = "red";
-const superFoodColor = "orange";
+// Colors from https://blog.datawrapper.de/colorblindness-part2/#Colorblind-safe-color-palettes
+const grassColor = 'rgba(74, 155, 119)';
+const snakeColor = 'rgb(52, 114, 170)';
+const foodColor = 'rgb(219, 160, 76)';
+const superFoodColor = 'rgb(239, 227, 109)';
 
 const keys = {
   38: "up",
