@@ -29,7 +29,8 @@ const directions = {
 };
 
 /*
- * The grid of cells.
+ * The grid of cells. We store the grid in a single array in column
+ * major order.
  */
 class Grid {
   constructor(dimension, initialValue) {
@@ -72,17 +73,17 @@ class Grid {
   }
 
   toXY(i) {
+    // Whoops. This is apparently column major order. Which works. But
+    // was not what I meant to do.
     return { x: Math.floor(i / this.dimension), y: i % this.dimension };
+  }
+
+  fromXY(x, y) {
+    return x * this.dimension + y;
   }
 
   fromCell(cell) {
     return this.fromXY(cell.x, cell.y);
-  }
-
-  fromXY(x, y) {
-    // Whoops. This is apparently column major order. Which works. But
-    // was not what I meant to do.
-    return x * this.dimension + y;
   }
 
   isGrass(cell) {
@@ -328,46 +329,38 @@ class Game {
   }
 
   update(timestamp) {
-    if (!this.running) return false;
-    // When we completely fill a cell, then we check the next position
-    // to see if we're crashing into something. If not, then we check to
-    // see if we're going to be eating food.
-    // Fill in the next position in proportion to the number of
-    // milliseconds that have passed since we entered this cell. The big
-    // update happens exactly when we have filled the cell.
-    //
-    // Similarly, unfill the tail segment unless we are in the process
-    // of consuming food.
-    //
-    // Need to fill the cell in the direction we are moving.
-    //
-    // To unfill the tail we need to figure out the correct direction,
-    // namely toward the next segment.
-
-    if (this.enteredSquare === undefined) {
-      return this.updateHead(timestamp);
+    // Handle one animation frame. Most of the time this is just
+    // filling in the current head and erasing the current tail.
+    // However once we've completely filled the head, we call
+    // updateHead to handle turning, detect crashes, etc.
+    if (!this.running) {
+      return false;
     } else {
-      let timeInSquare = timestamp - this.enteredSquare;
-      let proportion = (timeInSquare * this.squaresPerSecond) / 1000;
-      if (proportion >= 1) {
-        // We have completely filled in the head.
-        this.drawCell(this.snake.getHead(), snakeColor);
-        if (!this.isEating) {
-          this.removeTail();
-        }
-        if (this.automatic) {
-          let m = move(this.grid, this.snake, this.foodCell);
-          if (m !== null) {
-            this.snake.turns.push(m);
-          }
-        }
+      if (this.enteredSquare === undefined) {
         return this.updateHead(timestamp);
       } else {
-        this.drawPartialHead(proportion);
-        if (!this.isEating) {
-          this.erasePartialTail(proportion);
+        let timeInSquare = timestamp - this.enteredSquare;
+        let proportion = (timeInSquare * this.squaresPerSecond) / 1000;
+        if (proportion >= 1) {
+          // We have completely filled in the head.
+          this.drawCell(this.snake.getHead(), snakeColor);
+          if (!this.isEating) {
+            this.removeTail();
+          }
+          if (this.automatic) {
+            let m = move(this.grid, this.snake, this.foodCell);
+            if (m !== null) {
+              this.snake.turns.push(m);
+            }
+          }
+          return this.updateHead(timestamp);
+        } else {
+          this.drawPartialHead(proportion);
+          if (!this.isEating) {
+            this.erasePartialTail(proportion);
+          }
+          return true;
         }
-        return true;
       }
     }
   }
@@ -400,11 +393,11 @@ class Game {
           this.boosted = false;
           this.squaresPerSecond /= boost;
         }
+
         this.scorekeeper.incrementScore();
         this.squaresPerSecond *= this.speedUp;
-
-        // I.e. we're eating the food in the next square. Go ahead and
-        // add some new food elsewhere.
+        // We're eating the food in the square we're entering so add
+        // more food elsewhere.
         this.foodCell = this.addRandomFood();
       }
       return true;
@@ -492,16 +485,15 @@ function move(grid, snake, food) {
       }
     }
   }
-  if (choice == null) {
-    throw new Error("Can't find any move at all.");
+  if (choice != null) {
+    let { x, y } = grid.toXY(choice);
+    return {
+      dx: toward(x, head.x),
+      dy: toward(y, head.y),
+    };
+  } else {
+    return null;
   }
-
-  let to = grid.toXY(choice);
-
-  return {
-    dx: toward(to.x, head.x),
-    dy: toward(to.y, head.y),
-  };
 }
 
 function gradient(grid, x, y) {
