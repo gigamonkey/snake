@@ -31,7 +31,11 @@ const directions = {
 
 /*
  * The grid of cells. We store the grid in a single array in column
- * major order.
+ * major order. The cell indices happen to be numbers but they should
+ * be treated as opaque to all code outside this class. The toXY
+ * method can translate them to x, y coordinates. Using this
+ * representation makes it possible to make sets of cells which is
+ * useful in the gradient function.
  */
 class Grid {
   constructor(dimension, initialValue) {
@@ -39,17 +43,12 @@ class Grid {
     this.cells = Array(dimension * dimension).fill(initialValue);
   }
 
-  get(cell) {
-    return this.cells[this.toIndex(cell)];
+  set(i, value) {
+    this.cells[i] = value;
   }
 
-  set(cell, value) {
-    this.cells[this.toIndex(cell)] = value;
-  }
-
-  onGrid(cell) {
-    let { x, y } = cell;
-    return 0 <= x && x < this.dimension && 0 <= y && y < this.dimension;
+  onGrid(i) {
+    return i != -1;
   }
 
   count(value) {
@@ -67,7 +66,7 @@ class Grid {
       while (true) {
         let i = Math.floor(Math.random() * this.cells.length);
         if (this.cells[i] == value) {
-          return this.toXY(i);
+          return i;
         }
       }
     }
@@ -79,32 +78,35 @@ class Grid {
     return { x: Math.floor(i / this.dimension), y: i % this.dimension };
   }
 
-  toIndex(cell) {
-    return cell.x * this.dimension + cell.y;
+  center() {
+    let mid = Math.floor(this.dimension / 2) - 1;
+    return mid * (this.dimension + 1);
   }
 
-  inDirection(cell, d) {
+  inDirection(i, d) {
+    let { x, y } = this.toXY(i);
     let { dx, dy } = d;
-    return { x: cell.x + dx, y: cell.y + dy };
+    let newX = x + dx;
+    let newY = y + dy;
+    if (0 <= newX && newX < this.dimension && 0 <= newY && newY < this.dimension) {
+      return newX * this.dimension + newY;
+    } else {
+      return -1;
+    }
   }
 
-  isTraversable(cell) {
-    return this.onGrid(cell) && this.get(cell) !== snakeColor;
+  isTraversable(i) {
+    return this.onGrid(i) && this.cells[i] !== snakeColor;
   }
 
-  isFood(cell) {
-    return this.get(cell) == foodColor || this.isSuperFood(cell);
+  isFood(i) {
+    return this.cells[i] == foodColor || this.isSuperFood(i);
   }
 
-  isSuperFood(cell) {
-    return this.get(cell) == superFoodColor;
+  isSuperFood(i) {
+    return this.cells[i] == superFoodColor;
   }
 
-  /*
-   * This function is in terms of raw indices because we use it in
-   * computing gradients which need to express cells as values that
-   * can be put in sets.
-   */
   neighbors(i) {
     let { x, y } = this.toXY(i);
     let ns = [];
@@ -115,11 +117,8 @@ class Grid {
     return ns;
   }
 
-  /*
-   * N.B. the second argument is a raw index like we'd get from
-   * neighbors.
-   */
-  direction(head, i) {
+  direction(h, i) {
+    let head = this.toXY(h);
     let { x, y } = this.toXY(i);
     return {
       dx: Math.sign(x - head.x),
@@ -127,15 +126,40 @@ class Grid {
     };
   }
 
-  manhattanDistance(a, b) {
+  manhattanDistance(from, to) {
+    let a = this.toXY(from);
+    let b = this.toXY(to);
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  }
+
+  gradient(cell) {
+    let g = Array(this.cells.length).fill(Infinity);
+
+    let stack = [];
+    let seen = new Set();
+
+    stack.push({ i: cell, d: 0 });
+    seen.add(cell);
+
+    while (stack.length > 0) {
+      let { i, d } = stack.shift();
+      g[i] = d;
+      for (let n of this.neighbors(i)) {
+        if (!seen.has(n) && this.cells[n] !== snakeColor) {
+          stack.push({ i: n, d: d + 1 });
+          seen.add(n);
+        }
+      }
+    }
+    return g;
   }
 }
 
 /*
  * The snake itself. We use a circular buffer since we need to add at
  * one end and remove at the other. Could just use a regular array
- * with push and shift but shift is O(n).
+ * with push and shift but shift is O(n). The values of the segments
+ * are the opaque cell indices used by the Grid class.
  */
 class Snake {
   constructor(dimension) {
@@ -251,10 +275,9 @@ class Game {
     this.speedUp = speedUp;
     this.automatic = false;
 
-    let mid = this.dimension / 2 - 1;
     this.ctx.fillStyle = grassColor;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    this.placeSnake(mid, mid, "right", 2);
+    this.placeSnake(this.grid.center(), "right", 2);
     this.foodCell = this.addRandomFood();
   }
 
@@ -306,8 +329,8 @@ class Game {
     this.grid.set(cell, snakeColor);
   }
 
-  placeSnake(x, y, direction, length) {
-    this.snake.addAtHead({ x: x, y: y });
+  placeSnake(cell, direction, length) {
+    this.snake.addAtHead(cell);
     this.snake.changeDirection(direction);
     this.snake.applyNextTurn();
     for (let i = 0; i < length - 1; i++) {
@@ -324,12 +347,13 @@ class Game {
   }
 
   drawCell(cell, color) {
+    let { x, y } = this.grid.toXY(cell);
     this.grid.set(cell, color);
     this.ctx.fillStyle = grassColor;
-    this.ctx.fillRect(cell.x * size, cell.y * size, size, size);
+    this.ctx.fillRect(x * size, y * size, size, size);
     if (color !== grassColor) {
       this.ctx.fillStyle = color;
-      this.ctx.fillRect(cell.x * size + 1, cell.y * size + 1, size - 2, size - 2);
+      this.ctx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
     }
   }
 
@@ -339,31 +363,32 @@ class Game {
 
   erasePartialTail(proportion) {
     let tail = this.snake.getTail();
-    let nextIndex = this.grid.toIndex(this.snake.getAfterTail());
+    let nextIndex = this.snake.getAfterTail();
     let direction = this.grid.direction(tail, nextIndex);
     this.partialFill(tail, direction, proportion, grassColor);
   }
 
   partialFill(cell, direction, proportion, color) {
-    let x = cell.x * size + 1;
-    let y = cell.y * size + 1;
+    let { x, y } = this.grid.toXY(cell);
+    let gx = x * size + 1;
+    let gy = y * size + 1;
     let width = size - 2;
     let height = size - 2;
 
     if (direction.dx != 0) {
       width *= proportion;
       if (direction.dx == -1) {
-        x += (size - 2) * (1 - proportion);
+        gx += (size - 2) * (1 - proportion);
       }
     } else if (direction.dy != 0) {
       height *= proportion;
       if (direction.dy == -1) {
-        y += (size - 2) * (1 - proportion);
+        gy += (size - 2) * (1 - proportion);
       }
     }
 
     this.ctx.fillStyle = color;
-    this.ctx.fillRect(x, y, width, height);
+    this.ctx.fillRect(gx, gy, width, height);
   }
 
   update(timestamp) {
@@ -480,8 +505,8 @@ function move(grid, snake, food) {
   let tail = snake.getTail();
   let next = grid.inDirection(head, snake.direction);
 
-  let tailGradient = gradient(grid, tail);
-  let foodGradient = gradient(grid, food);
+  let tailGradient = grid.gradient(tail);
+  let foodGradient = grid.gradient(food);
 
   function ok(n) {
     if (n == null || tailGradient[n] === Infinity) {
@@ -509,10 +534,8 @@ function move(grid, snake, food) {
 
   // Default to continuing in the current direction and then see if we
   // can find something better.
-  let nextIndex = grid.toIndex(next);
-
-  let choice = grid.onGrid(next) ? nextIndex : null;
-  for (let n of grid.neighbors(grid.toIndex(head))) {
+  let choice = grid.onGrid(next) ? next : null;
+  for (let n of grid.neighbors(head)) {
     if (grid.cells[n] !== snakeColor) {
       if (better(n, choice)) {
         choice = n;
@@ -520,36 +543,12 @@ function move(grid, snake, food) {
     }
   }
 
-  if (choice == nextIndex || choice == null) {
+  if (choice == next || choice == null) {
     return null;
   } else {
     return grid.direction(head, choice);
   }
 }
-
-function gradient(grid, cell) {
-  let g = Array(grid.cells.length).fill(Infinity);
-
-  let stack = [];
-  let seen = new Set();
-  let i = grid.toIndex(cell);
-
-  stack.push({ i: i, d: 0 });
-  seen.add(i);
-
-  while (stack.length > 0) {
-    let { i, d } = stack.shift();
-    g[i] = d;
-    for (let n of grid.neighbors(i)) {
-      if (!seen.has(n) && grid.cells[n] !== snakeColor) {
-        stack.push({ i: n, d: d + 1 });
-        seen.add(n);
-      }
-    }
-  }
-  return g;
-}
-
 
 function nDigits(num, n) {
   let numStr = "" + num;
