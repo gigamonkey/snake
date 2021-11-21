@@ -126,6 +126,10 @@ class Grid {
       dy: Math.sign(y - head.y),
     };
   }
+
+  manhattanDistance(a, b) {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+  }
 }
 
 /*
@@ -450,7 +454,7 @@ class Game {
       this.drawCell(cell, color);
 
       let h = this.snake.getHead();
-      let dist = manhattanDistance(cell.x, cell.y, h.x, h.y);
+      let dist = this.grid.manhattanDistance(cell, h);
       let bonus = color == foodColor ? 20 : 60;
       this.scorekeeper.setBonusPoints(dist + bonus);
       return cell;
@@ -546,9 +550,6 @@ function gradient(grid, cell) {
   return g;
 }
 
-function manhattanDistance(x1, y1, x2, y2) {
-  return Math.abs(x1 - x2) + Math.abs(y1 - y2);
-}
 
 function nDigits(num, n) {
   let numStr = "" + num;
