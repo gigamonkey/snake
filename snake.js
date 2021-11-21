@@ -202,8 +202,8 @@ class Snake {
     this.tail = (this.tail + 1) % this.segments.length;
   }
 
-  changeDirection(name) {
-    this.turns.push(directions[name]);
+  changeDirection(d) {
+    this.turns.push(d);
   }
 
   applyNextTurn() {
@@ -312,7 +312,7 @@ class Game {
       } else if (key in directions) {
         if (!this.automatic) {
           if (!this.running) this.start();
-          this.snake.changeDirection(key);
+          this.snake.changeDirection(directions[key]);
         }
       } else {
         //console.log(e.keyCode);
