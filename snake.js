@@ -43,12 +43,12 @@ class Grid {
     this.cells = Array(dimension * dimension).fill(initialValue);
   }
 
-  set(i, value) {
-    this.cells[i] = value;
+  set(cell, value) {
+    this.cells[cell] = value;
   }
 
-  onGrid(i) {
-    return i != -1;
+  onGrid(cell) {
+    return cell != -1;
   }
 
   count(value) {
@@ -64,18 +64,18 @@ class Grid {
   randomCell(value) {
     if (this.count(value) > 0) {
       while (true) {
-        let i = Math.floor(Math.random() * this.cells.length);
-        if (this.cells[i] == value) {
-          return i;
+        let cell = Math.floor(Math.random() * this.cells.length);
+        if (this.cells[cell] == value) {
+          return cell;
         }
       }
     }
   }
 
-  toXY(i) {
+  toXY(cell) {
     // Whoops. This is apparently column major order. Which works. But
     // was not what I meant to do.
-    return { x: Math.floor(i / this.dimension), y: i % this.dimension };
+    return { x: Math.floor(cell / this.dimension), y: cell % this.dimension };
   }
 
   center() {
@@ -83,8 +83,8 @@ class Grid {
     return mid * (this.dimension + 1);
   }
 
-  inDirection(i, d) {
-    let { x, y } = this.toXY(i);
+  inDirection(cell, d) {
+    let { x, y } = this.toXY(cell);
     let { dx, dy } = d;
     let newX = x + dx;
     let newY = y + dy;
@@ -95,34 +95,34 @@ class Grid {
     }
   }
 
-  isTraversable(i) {
-    return this.onGrid(i) && this.cells[i] !== snakeColor;
+  isTraversable(cell) {
+    return this.onGrid(cell) && this.cells[cell] !== snakeColor;
   }
 
-  isFood(i) {
-    return this.cells[i] == foodColor || this.isSuperFood(i);
+  isFood(cell) {
+    return this.cells[cell] == foodColor || this.isSuperFood(cell);
   }
 
-  isSuperFood(i) {
-    return this.cells[i] == superFoodColor;
+  isSuperFood(cell) {
+    return this.cells[cell] == superFoodColor;
   }
 
-  neighbors(i) {
-    let { x, y } = this.toXY(i);
+  neighbors(cell) {
     let ns = [];
-    if (x > 0) ns.push(i - this.dimension);
-    if (x < this.dimension - 1) ns.push(i + this.dimension);
-    if (y > 0) ns.push(i - 1);
-    if (y < this.dimension - 1) ns.push(i + 1);
+    let { x, y } = this.toXY(cell);
+    if (x > 0) ns.push(cell - this.dimension);
+    if (x < this.dimension - 1) ns.push(cell + this.dimension);
+    if (y > 0) ns.push(cell - 1);
+    if (y < this.dimension - 1) ns.push(cell + 1);
     return ns;
   }
 
-  direction(h, i) {
-    let head = this.toXY(h);
-    let { x, y } = this.toXY(i);
+  direction(fromCell, toCell) {
+    let from = this.toXY(fromCell);
+    let to = this.toXY(toCell);
     return {
-      dx: Math.sign(x - head.x),
-      dy: Math.sign(y - head.y),
+      dx: Math.sign(to.x - from.x),
+      dy: Math.sign(to.y - from.y),
     };
   }
 
@@ -132,21 +132,21 @@ class Grid {
     return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
   }
 
-  gradient(cell) {
+  gradient(start) {
     let g = Array(this.cells.length).fill(Infinity);
 
     let stack = [];
     let seen = new Set();
 
-    stack.push({ i: cell, d: 0 });
-    seen.add(cell);
+    stack.push({ cell: start, d: 0 });
+    seen.add(start);
 
     while (stack.length > 0) {
-      let { i, d } = stack.shift();
-      g[i] = d;
-      for (let n of this.neighbors(i)) {
+      let { cell, d } = stack.shift();
+      g[cell] = d;
+      for (let n of this.neighbors(cell)) {
         if (!seen.has(n) && this.cells[n] !== snakeColor) {
-          stack.push({ i: n, d: d + 1 });
+          stack.push({ cell: n, d: d + 1 });
           seen.add(n);
         }
       }
@@ -490,10 +490,20 @@ class Game {
 
 class UI {
   updateScore(score) {
-    document.getElementById("score").innerText = nDigits(score, 4);
+    document.getElementById("score").innerText = this.nDigits(score, 4);
   }
+
   updateBonusPoints(points) {
-    document.getElementById("bonus").innerText = nDigits(points, 3);
+    document.getElementById("bonus").innerText = this.nDigits(points, 3);
+  }
+
+  nDigits(num, n) {
+    let numStr = "" + num;
+    return (
+      Array(Math.max(0, n - numStr.length))
+        .fill(0)
+        .join("") + numStr
+    );
   }
 }
 
@@ -550,18 +560,9 @@ function move(grid, snake, food) {
   }
 }
 
-function nDigits(num, n) {
-  let numStr = "" + num;
-  return (
-    Array(Math.max(0, n - numStr.length))
-      .fill(0)
-      .join("") + numStr
-  );
-}
-
-function animate(update) {
+function animate(oneFrame) {
   const step = (timestamp) => {
-    if (update(timestamp)) {
+    if (oneFrame(timestamp)) {
       requestAnimationFrame(step);
     } else {
       if (debug) {
