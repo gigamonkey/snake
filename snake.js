@@ -39,12 +39,12 @@ class Grid {
     this.cells = Array(dimension * dimension).fill(initialValue);
   }
 
-  getCell(cell) {
-    return this.cells[this.fromCell(cell)];
+  get(cell) {
+    return this.cells[this.toIndex(cell)];
   }
 
-  setCell(cell, value) {
-    this.cells[this.fromCell(cell)] = value;
+  set(cell, value) {
+    this.cells[this.toIndex(cell)] = value;
   }
 
   onGrid(cell) {
@@ -79,26 +79,32 @@ class Grid {
     return { x: Math.floor(i / this.dimension), y: i % this.dimension };
   }
 
-  fromXY(x, y) {
-    return x * this.dimension + y;
+  toIndex(cell) {
+    return cell.x * this.dimension + cell.y;
   }
 
-  fromCell(cell) {
-    return this.fromXY(cell.x, cell.y);
+  inDirection(cell, d) {
+    let { dx, dy } = d;
+    return { x: cell.x + dx, y: cell.y + dy };
   }
 
   isTraversable(cell) {
-    return this.onGrid(cell) && this.getCell(cell) !== snakeColor;
+    return this.onGrid(cell) && this.get(cell) !== snakeColor;
   }
 
   isFood(cell) {
-    return this.getCell(cell) == foodColor || this.isSuperFood(cell);
+    return this.get(cell) == foodColor || this.isSuperFood(cell);
   }
 
   isSuperFood(cell) {
-    return this.getCell(cell) == superFoodColor;
+    return this.get(cell) == superFoodColor;
   }
 
+  /*
+   * This function is in terms of raw indices because we use it in
+   * computing gradients which need to express cells as values that
+   * can be put in sets.
+   */
   neighbors(i) {
     let { x, y } = this.toXY(i);
     let ns = [];
@@ -107,6 +113,18 @@ class Grid {
     if (y > 0) ns.push(i - 1);
     if (y < this.dimension - 1) ns.push(i + 1);
     return ns;
+  }
+
+  /*
+   * N.B. the second argument is a raw index like we'd get from
+   * neighbors.
+   */
+  direction(head, i) {
+    let { x, y } = this.toXY(i);
+    return {
+      dx: Math.sign(x - head.x),
+      dy: Math.sign(y - head.y),
+    };
   }
 }
 
@@ -132,34 +150,19 @@ class Snake {
     return this.segments[this.tail];
   }
 
+  getAfterTail() {
+    return this.segments[(this.tail + 1) % this.segments.length];
+  }
+
   map(fn) {
     for (let i = this.tail; i != this.head; i = (i + 1) % this.segments.length) {
       fn(this.segments[i]);
     }
   }
 
-  getTailDirection() {
-    let tail = this.getTail();
-    let nextCell = this.segments[(this.tail + 1) % this.segments.length];
-    return {
-      dx: nextCell.x - tail.x,
-      dy: nextCell.y - tail.y,
-    };
-  }
-
   length() {
     let max = this.segments.length;
     return (max + (this.head - this.tail)) % max;
-  }
-
-  nextPosition() {
-    let head = this.getHead();
-    let { dx, dy } = this.direction;
-    return { x: head.x + dx, y: head.y + dy };
-  }
-
-  extend() {
-    this.addAtHead(this.nextPosition());
   }
 
   addAtHead(cell) {
@@ -195,7 +198,7 @@ class Snake {
 }
 
 /*
- * Keep track of the score and update listeners when it changes.
+ * Keep track of the score and update UI when it changes.
  */
 class Scorekeeper {
   constructor(ui) {
@@ -296,7 +299,7 @@ class Game {
     this.snake.addAtHead(cell);
     // Set this now even though we will visually fill it in a bit at a
     // time.
-    this.grid.setCell(cell, snakeColor);
+    this.grid.set(cell, snakeColor);
   }
 
   placeSnake(x, y, direction, length) {
@@ -304,7 +307,9 @@ class Game {
     this.snake.changeDirection(direction);
     this.snake.applyNextTurn();
     for (let i = 0; i < length - 1; i++) {
-      this.snake.extend();
+      let head = this.snake.getHead();
+      let d = this.snake.direction;
+      this.snake.addAtHead(this.grid.inDirection(head, d));
     }
     this.snake.map((cell) => this.drawCell(cell, snakeColor));
   }
@@ -315,7 +320,7 @@ class Game {
   }
 
   drawCell(cell, color) {
-    this.grid.setCell(cell, color);
+    this.grid.set(cell, color);
     this.ctx.fillStyle = grassColor;
     this.ctx.fillRect(cell.x * size, cell.y * size, size, size);
     if (color !== grassColor) {
@@ -330,8 +335,31 @@ class Game {
 
   erasePartialTail(proportion) {
     let tail = this.snake.getTail();
-    let direction = this.snake.getTailDirection();
+    let nextIndex = this.grid.toIndex(this.snake.getAfterTail());
+    let direction = this.grid.direction(tail, nextIndex);
     this.partialFill(tail, direction, proportion, grassColor);
+  }
+
+  partialFill(cell, direction, proportion, color) {
+    let x = cell.x * size + 1;
+    let y = cell.y * size + 1;
+    let width = size - 2;
+    let height = size - 2;
+
+    if (direction.dx != 0) {
+      width *= proportion;
+      if (direction.dx == -1) {
+        x += (size - 2) * (1 - proportion);
+      }
+    } else if (direction.dy != 0) {
+      height *= proportion;
+      if (direction.dy == -1) {
+        y += (size - 2) * (1 - proportion);
+      }
+    }
+
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(x, y, width, height);
   }
 
   update(timestamp) {
@@ -381,7 +409,10 @@ class Game {
     this.snake.applyNextTurn();
     this.scorekeeper.decrementBonusPoints();
 
-    let next = this.snake.nextPosition();
+    let head = this.snake.getHead();
+    let direction = this.snake.direction;
+
+    let next = this.grid.inDirection(head, direction);
 
     if (this.grid.isTraversable(next)) {
       // Check if it's food before we enter the square but wait to place
@@ -426,28 +457,6 @@ class Game {
     }
     return null;
   }
-
-  partialFill(cell, direction, proportion, color) {
-    let x = cell.x * size + 1;
-    let y = cell.y * size + 1;
-    let width = size - 2;
-    let height = size - 2;
-
-    if (direction.dx != 0) {
-      width *= proportion;
-      if (direction.dx == -1) {
-        x += (size - 2) * (1 - proportion);
-      }
-    } else if (direction.dy != 0) {
-      height *= proportion;
-      if (direction.dy == -1) {
-        y += (size - 2) * (1 - proportion);
-      }
-    }
-
-    this.ctx.fillStyle = color;
-    this.ctx.fillRect(x, y, width, height);
-  }
 }
 
 class UI {
@@ -465,10 +474,10 @@ class UI {
 function move(grid, snake, food) {
   let head = snake.getHead();
   let tail = snake.getTail();
-  let next = snake.nextPosition();
+  let next = grid.inDirection(head, snake.direction);
 
-  let tailGradient = gradient(grid, tail.x, tail.y);
-  let foodGradient = gradient(grid, food.x, food.y);
+  let tailGradient = gradient(grid, tail);
+  let foodGradient = gradient(grid, food);
 
   function ok(n) {
     if (n == null || tailGradient[n] === Infinity) {
@@ -496,9 +505,10 @@ function move(grid, snake, food) {
 
   // Default to continuing in the current direction and then see if we
   // can find something better.
-  let nextIndex = grid.fromCell(next);
+  let nextIndex = grid.toIndex(next);
+
   let choice = grid.onGrid(next) ? nextIndex : null;
-  for (let n of grid.neighbors(grid.fromCell(head))) {
+  for (let n of grid.neighbors(grid.toIndex(head))) {
     if (grid.cells[n] !== snakeColor) {
       if (better(n, choice)) {
         choice = n;
@@ -509,20 +519,16 @@ function move(grid, snake, food) {
   if (choice == nextIndex || choice == null) {
     return null;
   } else {
-    let { x, y } = grid.toXY(choice);
-    return {
-      dx: toward(x, head.x),
-      dy: toward(y, head.y),
-    };
+    return grid.direction(head, choice);
   }
 }
 
-function gradient(grid, x, y) {
+function gradient(grid, cell) {
   let g = Array(grid.cells.length).fill(Infinity);
 
   let stack = [];
   let seen = new Set();
-  let i = grid.fromXY(x, y);
+  let i = grid.toIndex(cell);
 
   stack.push({ i: i, d: 0 });
   seen.add(i);
@@ -538,10 +544,6 @@ function gradient(grid, x, y) {
     }
   }
   return g;
-}
-
-function toward(a, b) {
-  return a === b ? 0 : a > b ? 1 : -1;
 }
 
 function manhattanDistance(x1, y1, x2, y2) {
