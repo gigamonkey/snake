@@ -48,13 +48,13 @@ class Grid {
   }
 
   onGrid(cell) {
-    return cell != -1;
+    return cell !== -1;
   }
 
   count(value) {
     let c = 0;
     for (let color of this.cells) {
-      if (color == value) {
+      if (color === value) {
         c++;
       }
     }
@@ -65,7 +65,7 @@ class Grid {
     if (this.count(value) > 0) {
       while (true) {
         let cell = Math.floor(Math.random() * this.cells.length);
-        if (this.cells[cell] == value) {
+        if (this.cells[cell] === value) {
           return cell;
         }
       }
