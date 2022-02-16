@@ -474,7 +474,7 @@ class Game {
 
   addRandomFood() {
     let cell = this.grid.randomCell(grassColor);
-    if (cell) {
+    if (cell !== null) {
       let color = !this.boosted && Math.random() < 0.1 ? superFoodColor : foodColor;
       this.drawCell(cell, color);
 
